@@ -6,6 +6,9 @@ spring:
     import: optional:file:.env[.properties]
   profiles:
     default: dev
+  autoconfigure:
+    # No in-memory user with a generated password: Identity Access will provide the users.
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
