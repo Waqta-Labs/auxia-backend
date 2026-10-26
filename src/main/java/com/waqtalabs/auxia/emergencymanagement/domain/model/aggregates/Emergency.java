@@ -1,10 +1,14 @@
 package com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyAlreadyClosedException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyClosedException;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AdministrativeLocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyStatus;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyType;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
 import java.time.LocalDate;
 import java.util.Objects;
 import java.util.Optional;
@@ -76,6 +80,22 @@ public final class Emergency {
 
   public boolean isActive() {
     return status == EmergencyStatus.ACTIVE;
+  }
+
+  /**
+   * Registers a zone affected by this emergency. The geolocation is optional.
+   *
+   * @throws EmergencyClosedException if the emergency is closed
+   */
+  public Zone registerZone(
+      String name,
+      Geolocation geolocation,
+      PopulationImpact populationImpact,
+      DamageLevel damageLevel) {
+    if (!isActive()) {
+      throw new EmergencyClosedException(id);
+    }
+    return Zone.register(id, name, geolocation, populationImpact, damageLevel);
   }
 
   public EmergencyId id() {
