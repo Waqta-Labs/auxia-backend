@@ -4,6 +4,8 @@ spring:
   config:
     # Local development: DB_* variables can live in a .env file (never committed).
     import: optional:file:.env[.properties]
+  profiles:
+    default: dev
   datasource:
     url: ${DB_URL}
     username: ${DB_USERNAME}
@@ -12,3 +14,17 @@ spring:
     open-in-view: false
     hibernate:
       ddl-auto: validate
+
+info:
+  app:
+    name: AuxIA Backend API
+    version: '@project.version@'
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  info:
+    env:
+      enabled: true
