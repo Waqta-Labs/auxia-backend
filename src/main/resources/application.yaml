@@ -18,9 +18,19 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+  flyway:
+    # One schema per bounded context; the history table lives in public.
+    schemas: emergency_management, resource_management, traceability, identity_access, citizen_transparency
+    default-schema: public
+    # Neon already had the schema of V1 when Flyway was added: on that database V1 is recorded
+    # as the baseline instead of running. An empty database runs every migration from V1.
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: schema of the project report
   jpa:
     open-in-view: false
     hibernate:
+      # Flyway owns the schema; Hibernate only checks that the entities match it.
       ddl-auto: validate
 
 info:
