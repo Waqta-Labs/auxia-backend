@@ -77,6 +77,38 @@ class DatabaseMigrationTests {
         .hasMessageContaining("chk_zone_people_affected_population");
   }
 
+  @Test
+  void fieldReportCanBePendingZoneAssignment() {
+    UUID emergencyId = insertEmergency();
+
+    assertThatCode(() -> insertFieldReport(emergencyId, null)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void fieldReportCanReferenceAZoneOfItsEmergency() {
+    UUID emergencyId = insertEmergency();
+    UUID zoneId = insertZone(emergencyId, null, 0);
+
+    assertThatCode(() -> insertFieldReport(emergencyId, zoneId)).doesNotThrowAnyException();
+  }
+
+  @Test
+  void fieldReportCannotReferenceAZoneOfAnotherEmergency() {
+    UUID zoneId = insertZone(insertEmergency(), null, 0);
+    UUID otherEmergencyId = insertEmergency();
+
+    assertThatThrownBy(() -> insertFieldReport(otherEmergencyId, zoneId))
+        .isInstanceOf(DataIntegrityViolationException.class)
+        .hasMessageContaining("fk_field_report_zone");
+  }
+
+  @Test
+  void fieldReportRequiresAnExistingEmergency() {
+    assertThatThrownBy(() -> insertFieldReport(UUID.randomUUID(), null))
+        .isInstanceOf(DataIntegrityViolationException.class)
+        .hasMessageContaining("fk_field_report_emergency");
+  }
+
   private UUID insertEmergency() {
     UUID id = UUID.randomUUID();
     jdbcTemplate.update(
@@ -99,5 +131,15 @@ class DatabaseMigrationTests {
         population,
         peopleAffected);
     return id;
+  }
+
+  private void insertFieldReport(UUID emergencyId, UUID zoneId) {
+    jdbcTemplate.update(
+        "INSERT INTO emergency_management.field_reports"
+            + " (id, emergency_id, zone_id, raw_text, source)"
+            + " VALUES (?, ?, ?, 'Derrumbe de viviendas', 'VOLUNTEER')",
+        UUID.randomUUID(),
+        emergencyId,
+        zoneId);
   }
 }
