@@ -23,6 +23,12 @@ info:
     name: AuxIA Backend API
     version: '@project.version@'
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+
 management:
   endpoints:
     web:
