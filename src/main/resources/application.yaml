@@ -1,0 +1,14 @@
+spring:
+  application:
+    name: auxia-backend
+  config:
+    # Local development: DB_* variables can live in a .env file (never committed).
+    import: optional:file:.env[.properties]
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: validate
