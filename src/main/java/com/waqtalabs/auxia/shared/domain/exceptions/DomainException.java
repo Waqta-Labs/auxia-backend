@@ -6,7 +6,8 @@ package com.waqtalabs.auxia.shared.domain.exceptions;
  * <p>The message is the English description for logs. The REST layer looks up the localized
  * detail by the exception class and fills it with {@link #arguments()}.
  */
-public abstract class DomainException extends RuntimeException {
+public abstract sealed class DomainException extends RuntimeException
+    permits NotFoundException, ConflictException, RuleViolationException {
 
   private final transient Object[] arguments;
 
