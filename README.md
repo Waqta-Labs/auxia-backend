@@ -40,10 +40,10 @@ src/main/java/com/waqtalabs/auxia/
 │       ├── persistence/jpa/
 │       └── integration/aiservice/   # Anti-Corruption Layer to auxia-ai-service
 ├── resourcemanagement/
-│   ├── domain/                      # Inventory with its StockItem and Reservation, exceptions
-│   ├── application/                 # inventory commands, handlers and InventoryQueryService
+│   ├── domain/                      # Inventory and Brigade with their entities, exceptions
+│   ├── application/                 # commands, handlers, InventoryQueryService, BrigadeQueryService
 │   ├── interfaces/
-│   │   ├── rest/                    # InventoryController
+│   │   ├── rest/                    # InventoryController, BrigadeController
 │   │   └── acl/                     # ResourceManagementContextFacade for other contexts
 │   └── infrastructure/persistence/jpa/
 └── shared/
@@ -195,6 +195,25 @@ authority assigns it (US-01, scenario 2).
 - Other bounded contexts use `ResourceManagementContextFacade` in the same
   process: available stock of an organization, and reserving or releasing the
   resources of a distribution plan. A reservation holds every line or none.
+
+### Brigades (Resource Management)
+
+| Method and path | Description |
+|---|---|
+| `POST /api/v1/brigades` | Create a brigade with its base location. It starts `AVAILABLE`. |
+| `GET /api/v1/brigades?organizationId=&status=` | Brigades of an organization by name, optionally by status. |
+| `GET /api/v1/brigades/{id}` | One brigade with its members and its assignment in progress. |
+| `POST /api/v1/brigades/{id}/members` | Add a member (`LEADER`, `DRIVER`, `MEDIC` or `VOLUNTEER`). |
+| `DELETE /api/v1/brigades/{id}/members/{memberId}` | Remove a member. |
+| `PATCH /api/v1/brigades/{id}/availability` | Put the brigade `AVAILABLE` or `OFF_DUTY`. |
+
+- Brigade names are unique per organization (409).
+- A brigade is assigned to a distribution plan only while it is available and
+  has a `LEADER`, and has one assignment in progress at most. The domain
+  already enforces these rules; the assignment itself arrives with the
+  distribution plans and the brigade suggestion of the AI Service.
+- While a brigade is assigned, its availability cannot change (409) and its last
+  leader cannot be removed (422). `ASSIGNED` is never set by hand (422).
 
 ## Urgency score
 
