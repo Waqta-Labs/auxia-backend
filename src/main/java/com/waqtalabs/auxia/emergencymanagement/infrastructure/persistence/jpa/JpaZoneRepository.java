@@ -29,7 +29,7 @@ class JpaZoneRepository implements ZoneRepository {
     return repository.findById(id.value()).map(ZoneJpaMapper::toDomain);
   }
 
-  /** Until the urgency score exists, zones keep the order in which they were registered. */
+  /** In registration order. ZoneQueryService sorts them by urgency score for the ranking. */
   @Override
   public List<Zone> findByEmergencyId(EmergencyId emergencyId) {
     return repository.findByEmergencyIdOrderByCreatedAtAsc(emergencyId.value()).stream()

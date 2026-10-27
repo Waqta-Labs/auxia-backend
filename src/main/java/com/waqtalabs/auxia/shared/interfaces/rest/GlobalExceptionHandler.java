@@ -1,5 +1,6 @@
 package com.waqtalabs.auxia.shared.interfaces.rest;
 
+import com.waqtalabs.auxia.shared.application.exceptions.ExternalServiceUnavailableException;
 import com.waqtalabs.auxia.shared.domain.exceptions.ConflictException;
 import com.waqtalabs.auxia.shared.domain.exceptions.DomainException;
 import com.waqtalabs.auxia.shared.domain.exceptions.NotFoundException;
@@ -70,6 +71,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             .titleMessageCode(ErrorResponse.getDefaultTitleMessageCode(category))
             .detailMessageCode(ErrorResponse.getDefaultDetailMessageCode(ex.getClass(), null))
             .detailMessageArguments(ex.arguments())
+            .build()
+            .updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
+    return handleExceptionInternal(ex, body, new HttpHeaders(), status, request);
+  }
+
+  /** An external service, such as the AI Service, did not answer: 503, so the client retries. */
+  @ExceptionHandler(ExternalServiceUnavailableException.class)
+  public ResponseEntity<Object> handleExternalServiceUnavailable(
+      ExternalServiceUnavailableException ex, WebRequest request) {
+    HttpStatus status = HttpStatus.SERVICE_UNAVAILABLE;
+    ProblemDetail body =
+        ErrorResponse.builder(ex, status, ex.getMessage())
+            .detailMessageArguments(ex.serviceName())
             .build()
             .updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
     return handleExceptionInternal(ex, body, new HttpHeaders(), status, request);

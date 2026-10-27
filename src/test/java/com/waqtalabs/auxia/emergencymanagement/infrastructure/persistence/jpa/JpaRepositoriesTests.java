@@ -13,14 +13,23 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Emergen
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyType;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PriorityLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ReportSource;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ScoreContribution;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneStatus;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.EmergencyRepository;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.FieldReportRepository;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.ZoneRepository;
+import jakarta.persistence.EntityManager;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -41,6 +50,9 @@ class JpaRepositoriesTests {
   @Autowired private EmergencyRepository emergencies;
   @Autowired private ZoneRepository zones;
   @Autowired private FieldReportRepository fieldReports;
+
+  // Flushing and clearing it makes the next read come from the database, not from the cache.
+  @Autowired private EntityManager entityManager;
 
   @Test
   void emergencyIsStoredAndRebuilt() {
@@ -95,6 +107,41 @@ class JpaRepositoriesTests {
     assertThat(found.populationImpact()).isEqualTo(impact);
     assertThat(found.damageLevel()).isEqualTo(DamageLevel.SEVERE);
     assertThat(found.status()).isEqualTo(zone.status());
+  }
+
+  @Test
+  void urgencyScoreOfAZoneIsStoredAndRebuilt() {
+    Emergency emergency = emergencies.save(registerEmergency("Huaico Chosica 2026"));
+    Zone zone = registerZone(emergency, "Sector Alto Perú");
+    var score =
+        new UrgencyScore(
+            54.9,
+            PriorityLevel.HIGH,
+            List.of(
+                new ScoreContribution("damageLevel", 30.0),
+                new ScoreContribution("needs", 11.3),
+                new ScoreContribution("vulnerablePopulation", 7.9)),
+            "rules-v1",
+            REPORTED_AT);
+    zone.updateUrgencyScore(score);
+    zones.save(zone);
+    entityManager.flush();
+    entityManager.clear();
+
+    Zone found = zones.findById(zone.id()).orElseThrow();
+
+    assertThat(found.urgencyScore()).contains(score);
+    assertThat(found.status()).isEqualTo(ZoneStatus.PRIORITIZED);
+  }
+
+  @Test
+  void zoneWithoutScoreKeepsItEmpty() {
+    Emergency emergency = emergencies.save(registerEmergency("Huaico Chosica 2026"));
+    Zone zone = zones.save(registerZone(emergency, "Quebrada Pedregal"));
+    entityManager.flush();
+    entityManager.clear();
+
+    assertThat(zones.findById(zone.id()).orElseThrow().urgencyScore()).isEmpty();
   }
 
   @Test
@@ -171,6 +218,48 @@ class JpaRepositoriesTests {
     assertThat(fieldReports.findByEmergencyId(emergency.id()))
         .extracting(FieldReport::id)
         .containsExactly(newer.id(), older.id());
+  }
+
+  @Test
+  void structuredDataOfAFieldReportIsStoredAsJsonAndRebuilt() {
+    Emergency emergency = emergencies.save(registerEmergency("Huaico Chosica 2026"));
+    FieldReport report =
+        FieldReport.register(
+            emergency.id(), "Derrumbe, 35 familias", ReportSource.AUTHORITY, REPORTED_AT);
+    var data =
+        new StructuredFieldData(
+            DamageLevel.SEVERE,
+            35,
+            140,
+            40,
+            15,
+            null,
+            Set.of(Need.SHELTER, Need.WATER),
+            List.of("disabledPeople"));
+    report.markProcessed(data);
+    fieldReports.save(report);
+    entityManager.flush();
+    entityManager.clear();
+
+    FieldReport found = fieldReports.findById(report.id()).orElseThrow();
+
+    assertThat(found.isProcessed()).isTrue();
+    assertThat(found.structuredData()).contains(data);
+    assertThat(found.structuredData().orElseThrow().needs())
+        .containsExactly(Need.WATER, Need.SHELTER);
+  }
+
+  @Test
+  void fieldReportNotProcessedHasNoStructuredData() {
+    Emergency emergency = emergencies.save(registerEmergency("Huaico Chosica 2026"));
+    FieldReport report =
+        fieldReports.save(
+            FieldReport.register(
+                emergency.id(), "Sin novedades", ReportSource.CITIZEN, REPORTED_AT));
+    entityManager.flush();
+    entityManager.clear();
+
+    assertThat(fieldReports.findById(report.id()).orElseThrow().structuredData()).isEmpty();
   }
 
   @Test

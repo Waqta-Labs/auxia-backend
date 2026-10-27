@@ -2,8 +2,11 @@ package com.waqtalabs.auxia.emergencymanagement.interfaces.rest;
 
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.AssignFieldReportZoneCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterFieldReportCommandHandler;
+import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.StructureFieldReportCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.AssignFieldReportZoneCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterFieldReportCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.commands.StructureFieldReportCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportByIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportsByEmergencyIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportsByZoneIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.FieldReportQueryService;
@@ -36,24 +39,33 @@ import org.springframework.web.bind.annotation.RestController;
 
 @RestController
 @RequestMapping("/api/v1")
-@Tag(name = "Field reports", description = "Reports written in natural language (US-01, TS-01)")
+@Tag(
+    name = "Field reports",
+    description = "Reports written in natural language and their NLP structuring (US-01, US-02)")
 public class FieldReportController {
 
   private final RegisterFieldReportCommandHandler registerFieldReport;
   private final AssignFieldReportZoneCommandHandler assignFieldReportZone;
+  private final StructureFieldReportCommandHandler structureFieldReport;
   private final FieldReportQueryService fieldReportQueries;
 
   public FieldReportController(
       RegisterFieldReportCommandHandler registerFieldReport,
       AssignFieldReportZoneCommandHandler assignFieldReportZone,
+      StructureFieldReportCommandHandler structureFieldReport,
       FieldReportQueryService fieldReportQueries) {
     this.registerFieldReport = registerFieldReport;
     this.assignFieldReportZone = assignFieldReportZone;
+    this.structureFieldReport = structureFieldReport;
     this.fieldReportQueries = fieldReportQueries;
   }
 
   @PostMapping("/zones/{zoneId}/field-reports")
-  @Operation(summary = "Register a field report of a zone")
+  @Operation(
+      summary = "Register a field report of a zone",
+      description =
+          "The report is structured with NLP right away, and the response already includes the"
+              + " structured data unless the AI Service did not answer.")
   @ApiResponse(responseCode = "201", description = "Report registered and associated to the zone")
   @ApiResponse(responseCode = "400", description = "Invalid request, for example without text")
   @ApiResponse(responseCode = "404", description = "The zone does not exist")
@@ -104,6 +116,31 @@ public class FieldReportController {
     return toResources(fieldReportQueries.handle(query));
   }
 
+  @GetMapping("/field-reports/{fieldReportId}")
+  @Operation(summary = "Get a field report with its structured data")
+  @ApiResponse(responseCode = "200", description = "Report found")
+  @ApiResponse(responseCode = "404", description = "The report does not exist")
+  public FieldReportResource findById(@PathVariable UUID fieldReportId) {
+    return FieldReportResourceAssembler.toResource(
+        fieldReportQueries.handle(new GetFieldReportByIdQuery(new FieldReportId(fieldReportId))));
+  }
+
+  @PostMapping("/field-reports/{fieldReportId}/structure")
+  @Operation(
+      summary = "Structure a field report with NLP",
+      description =
+          "Reports are structured on their own when they are registered (US-02). Use this"
+              + " endpoint when the AI Service did not answer at that moment. The score of the"
+              + " zone of the report is recalculated afterwards.")
+  @ApiResponse(responseCode = "200", description = "Report structured")
+  @ApiResponse(responseCode = "404", description = "The report does not exist")
+  @ApiResponse(responseCode = "409", description = "The report is already structured")
+  @ApiResponse(responseCode = "503", description = "The AI Service is not available")
+  public FieldReportResource structure(@PathVariable UUID fieldReportId) {
+    var command = new StructureFieldReportCommand(new FieldReportId(fieldReportId));
+    return FieldReportResourceAssembler.toResource(structureFieldReport.handle(command));
+  }
+
   @PatchMapping("/field-reports/{fieldReportId}/zone")
   @Operation(
       summary = "Assign the zone of a pending field report",
@@ -122,8 +159,9 @@ public class FieldReportController {
 
   private ResponseEntity<FieldReportResource> created(RegisterFieldReportCommand command) {
     FieldReport report = registerFieldReport.handle(command);
+    FieldReport current = fieldReportQueries.handle(new GetFieldReportByIdQuery(report.id()));
     return ResponseEntity.created(URI.create("/api/v1/field-reports/" + report.id().value()))
-        .body(FieldReportResourceAssembler.toResource(report));
+        .body(FieldReportResourceAssembler.toResource(current));
   }
 
   private static List<FieldReportResource> toResources(List<FieldReport> reports) {

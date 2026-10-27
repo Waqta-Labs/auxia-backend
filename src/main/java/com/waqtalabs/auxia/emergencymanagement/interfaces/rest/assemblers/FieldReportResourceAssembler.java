@@ -3,10 +3,12 @@ package com.waqtalabs.auxia.emergencymanagement.interfaces.rest.assemblers;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterFieldReportCommand;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.FieldReportResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterEmergencyFieldReportRequest;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterFieldReportRequest;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.StructuredFieldDataResource;
 import java.util.UUID;
 
 public final class FieldReportResourceAssembler {
@@ -36,6 +38,20 @@ public final class FieldReportResourceAssembler {
         report.rawText(),
         report.source(),
         report.reportedAt(),
-        report.isPendingZoneAssignment());
+        report.isPendingZoneAssignment(),
+        report.isProcessed(),
+        report.structuredData().map(FieldReportResourceAssembler::toResource).orElse(null));
+  }
+
+  private static StructuredFieldDataResource toResource(StructuredFieldData data) {
+    return new StructuredFieldDataResource(
+        data.damageLevel(),
+        data.familiesAffected(),
+        data.peopleAffected(),
+        data.children(),
+        data.elderlyPeople(),
+        data.disabledPeople(),
+        data.needs(),
+        data.missingVariables());
   }
 }

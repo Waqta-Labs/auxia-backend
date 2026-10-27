@@ -4,7 +4,11 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ScoreContribution;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
+import java.math.BigDecimal;
+import java.util.Optional;
 
 final class ZoneJpaMapper {
 
@@ -28,7 +32,8 @@ final class ZoneJpaMapper {
             entity.elderlyPeople,
             entity.disabledPeople),
         entity.damageLevel,
-        entity.status);
+        entity.status,
+        urgencyScore(entity));
   }
 
   /** Copies the aggregate into a new or managed entity, keeping the columns it does not own. */
@@ -47,5 +52,32 @@ final class ZoneJpaMapper {
     entity.disabledPeople = impact.disabledPeople();
     entity.damageLevel = zone.damageLevel();
     entity.status = zone.status();
+    Optional<UrgencyScore> score = zone.urgencyScore();
+    entity.urgencyScore = score.map(s -> BigDecimal.valueOf(s.value())).orElse(null);
+    entity.urgencyLevel = score.map(UrgencyScore::level).orElse(null);
+    entity.urgencyTopFeatures =
+        score
+            .map(
+                s ->
+                    s.topFeatures().stream()
+                        .map(f -> new ScoreContributionJson(f.feature(), f.contribution()))
+                        .toList())
+            .orElse(null);
+    entity.urgencyModelVersion = score.map(UrgencyScore::modelVersion).orElse(null);
+    entity.urgencyCalculatedAt = score.map(UrgencyScore::calculatedAt).orElse(null);
+  }
+
+  private static UrgencyScore urgencyScore(ZoneJpaEntity entity) {
+    if (entity.urgencyScore == null) {
+      return null;
+    }
+    return new UrgencyScore(
+        entity.urgencyScore.doubleValue(),
+        entity.urgencyLevel,
+        entity.urgencyTopFeatures.stream()
+            .map(f -> new ScoreContribution(f.feature(), f.contribution()))
+            .toList(),
+        entity.urgencyModelVersion,
+        entity.urgencyCalculatedAt);
   }
 }
