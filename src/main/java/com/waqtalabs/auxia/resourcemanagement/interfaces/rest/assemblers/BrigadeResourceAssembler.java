@@ -20,17 +20,23 @@ public final class BrigadeResourceAssembler {
 
   private BrigadeResourceAssembler() {}
 
-  public static CreateBrigadeCommand toCommand(CreateBrigadeRequest request) {
+  public static CreateBrigadeCommand toCommand(
+      OrganizationId organizationId, CreateBrigadeRequest request) {
     LocationResource base = request.baseLocation();
     return new CreateBrigadeCommand(
-        new OrganizationId(request.organizationId()),
+        organizationId,
         request.name(),
         new Location(base.latitude(), base.longitude()));
   }
 
-  public static AddStaffMemberCommand toCommand(UUID brigadeId, AddStaffMemberRequest request) {
+  public static AddStaffMemberCommand toCommand(
+      UUID brigadeId, OrganizationId organizationId, AddStaffMemberRequest request) {
     return new AddStaffMemberCommand(
-        new BrigadeId(brigadeId), request.fullName(), request.role(), request.phone());
+        new BrigadeId(brigadeId),
+        organizationId,
+        request.fullName(),
+        request.role(),
+        request.phone());
   }
 
   public static BrigadeResource toResource(Brigade brigade) {

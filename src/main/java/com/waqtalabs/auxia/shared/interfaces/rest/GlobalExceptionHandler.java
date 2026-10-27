@@ -14,6 +14,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.HttpStatusCode;
 import org.springframework.http.ProblemDetail;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.core.AuthenticationException;
 import org.springframework.validation.FieldError;
 import org.springframework.web.ErrorResponse;
 import org.springframework.web.bind.MethodArgumentNotValidException;
@@ -93,6 +95,19 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     return handleExceptionInternal(ex, body, new HttpHeaders(), status, request);
   }
 
+  /** A request to a protected endpoint without a valid token: 401. */
+  @ExceptionHandler(AuthenticationException.class)
+  public ResponseEntity<Object> handleMissingAuthentication(
+      AuthenticationException ex, WebRequest request) {
+    return securityProblem(ex, HttpStatus.UNAUTHORIZED, "authenticationRequired", request);
+  }
+
+  /** The user is signed in but their role cannot run the action (US-22): 403. */
+  @ExceptionHandler(AccessDeniedException.class)
+  public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
+    return securityProblem(ex, HttpStatus.FORBIDDEN, "accessDenied", request);
+  }
+
   /** An external service, such as the AI Service, did not answer: 503, so the client retries. */
   @ExceptionHandler(ExternalServiceUnavailableException.class)
   public ResponseEntity<Object> handleExternalServiceUnavailable(
@@ -115,6 +130,17 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
         ErrorResponse.builder(ex, status, "An unexpected error occurred.")
             .titleMessageCode(UNEXPECTED_TITLE_CODE)
             .detailMessageCode(UNEXPECTED_DETAIL_CODE)
+            .build()
+            .updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
+    return handleExceptionInternal(ex, body, new HttpHeaders(), status, request);
+  }
+
+  private ResponseEntity<Object> securityProblem(
+      Exception ex, HttpStatus status, String key, WebRequest request) {
+    ProblemDetail body =
+        ErrorResponse.builder(ex, status, ex.getMessage())
+            .titleMessageCode("problemDetail.title.security." + key)
+            .detailMessageCode("problemDetail.security." + key)
             .build()
             .updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
     return handleExceptionInternal(ex, body, new HttpHeaders(), status, request);

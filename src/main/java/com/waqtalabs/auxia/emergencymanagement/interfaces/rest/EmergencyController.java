@@ -19,6 +19,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -45,6 +46,7 @@ public class EmergencyController {
     this.emergencyQueries = emergencyQueries;
   }
 
+  @PreAuthorize("hasRole('AUTHORITY')")
   @PostMapping
   @Operation(summary = "Register an emergency", description = "It starts in ACTIVE status.")
   @ApiResponse(responseCode = "201", description = "Emergency registered")
@@ -73,6 +75,7 @@ public class EmergencyController {
         emergencyQueries.handle(new GetEmergencyByIdQuery(new EmergencyId(emergencyId))));
   }
 
+  @PreAuthorize("hasRole('AUTHORITY')")
   @PatchMapping("/{emergencyId}/close")
   @Operation(
       summary = "Close an emergency",

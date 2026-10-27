@@ -22,6 +22,7 @@ public class BrigadeQueryService {
   public Brigade handle(GetBrigadeByIdQuery query) {
     return brigadeRepository
         .findById(query.brigadeId())
+        .filter(brigade -> brigade.belongsTo(query.organizationId()))
         .orElseThrow(() -> new BrigadeNotFoundException(query.brigadeId()));
   }
 

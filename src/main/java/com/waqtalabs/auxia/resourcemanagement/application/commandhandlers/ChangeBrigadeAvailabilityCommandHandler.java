@@ -21,6 +21,7 @@ public class ChangeBrigadeAvailabilityCommandHandler {
     Brigade brigade =
         brigadeRepository
             .findById(command.brigadeId())
+            .filter(found -> found.belongsTo(command.organizationId()))
             .orElseThrow(() -> new BrigadeNotFoundException(command.brigadeId()));
     brigade.changeAvailability(command.status());
     return brigadeRepository.save(brigade);

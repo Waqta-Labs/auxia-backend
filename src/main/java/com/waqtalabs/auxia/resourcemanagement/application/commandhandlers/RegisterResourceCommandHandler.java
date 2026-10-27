@@ -23,6 +23,7 @@ public class RegisterResourceCommandHandler {
     Inventory inventory =
         inventoryRepository
             .findById(command.inventoryId())
+            .filter(found -> found.belongsTo(command.organizationId()))
             .orElseThrow(() -> new InventoryNotFoundException(command.inventoryId()));
     ResourceId resourceId =
         inventory.registerResource(

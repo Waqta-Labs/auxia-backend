@@ -34,6 +34,7 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -67,6 +68,7 @@ public class ZoneController {
     this.zoneReports = zoneReports;
   }
 
+  @PreAuthorize("hasRole('AUTHORITY')")
   @PostMapping("/emergencies/{emergencyId}/zones")
   @Operation(
       summary = "Register a zone of an emergency",
@@ -123,6 +125,7 @@ public class ZoneController {
         zoneQueries.handle(new GetZoneByIdQuery(new ZoneId(zoneId))));
   }
 
+  @PreAuthorize("hasRole('AUTHORITY')")
   @PatchMapping("/zones/{zoneId}/population-impact")
   @Operation(
       summary = "Update the population impact of a zone",
@@ -175,6 +178,7 @@ public class ZoneController {
         .body(pdf);
   }
 
+  @PreAuthorize("hasRole('AUTHORITY')")
   @PostMapping("/zones/{zoneId}/score")
   @Operation(
       summary = "Recalculate the urgency score of a zone",

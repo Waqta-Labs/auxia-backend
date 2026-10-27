@@ -21,6 +21,7 @@ public class RemoveStaffMemberCommandHandler {
     Brigade brigade =
         brigadeRepository
             .findById(command.brigadeId())
+            .filter(found -> found.belongsTo(command.organizationId()))
             .orElseThrow(() -> new BrigadeNotFoundException(command.brigadeId()));
     brigade.removeMember(command.memberId());
     return brigadeRepository.save(brigade);
