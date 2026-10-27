@@ -1,5 +1,6 @@
 package com.waqtalabs.auxia.identityaccess.infrastructure.security;
 
+import com.waqtalabs.auxia.identityaccess.application.queryservices.CheckAccessQueryHandler;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -31,6 +32,7 @@ class SecurityConfiguration {
   SecurityFilterChain securityFilterChain(
       HttpSecurity http,
       JwtTokenVerifier verifier,
+      CheckAccessQueryHandler checkAccess,
       @Qualifier("handlerExceptionResolver") HandlerExceptionResolver exceptionResolver)
       throws Exception {
     return http.csrf(AbstractHttpConfigurer::disable)
@@ -66,7 +68,8 @@ class SecurityConfiguration {
                         (request, response, ex) ->
                             exceptionResolver.resolveException(request, response, null, ex)))
         .addFilterBefore(
-            new JwtAuthenticationFilter(verifier), UsernamePasswordAuthenticationFilter.class)
+            new JwtAuthenticationFilter(verifier, checkAccess),
+            UsernamePasswordAuthenticationFilter.class)
         .build();
   }
 }
