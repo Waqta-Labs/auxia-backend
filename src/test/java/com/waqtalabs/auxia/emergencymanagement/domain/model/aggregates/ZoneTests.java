@@ -138,6 +138,19 @@ class ZoneTests {
   }
 
   @Test
+  void zoneGetsItsPopulationLaterAndThenHasDataForScoring() {
+    Zone zone =
+        emergency.registerZone(
+            "Quebrada Pedregal", null, new PopulationImpact(null, 0, 20, 0, 0, 0), DamageLevel.LOW);
+    var known = new PopulationImpact(300, 5, 20, 0, 0, 0);
+
+    zone.updatePopulationImpact(known);
+
+    assertThat(zone.populationImpact()).isEqualTo(known);
+    assertThat(zone.hasSufficientDataForScoring()).isTrue();
+  }
+
+  @Test
   void updatingTheScorePrioritizesTheZone() {
     Zone zone = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
     var score =

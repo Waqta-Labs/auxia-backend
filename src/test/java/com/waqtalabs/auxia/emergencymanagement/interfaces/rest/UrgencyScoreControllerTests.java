@@ -2,9 +2,12 @@ package com.waqtalabs.auxia.emergencymanagement.interfaces.rest;
 
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.empty;
+import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
+import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
@@ -24,6 +27,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
@@ -240,10 +244,66 @@ class UrgencyScoreControllerTests {
   }
 
   @Test
+  void populationAddedLaterMakesTheScoreAvailable() throws Exception {
+    String zoneId = idOf(registerZone(registerEmergency(), "Quebrada Pedregal", null, "SEVERE"));
+
+    // 40 × 0.75 (SEVERE) + 60 × 140 / 600
+    mockMvc
+        .perform(
+            patch("/api/v1/zones/" + zoneId + "/population-impact")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"population\": 600}"))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.populationImpact.population").value(600))
+        .andExpect(jsonPath("$.populationImpact.peopleAffected").value(140))
+        .andExpect(jsonPath("$.score").value(44.0));
+    mockMvc
+        .perform(get("/api/v1/zones/" + zoneId + "/score"))
+        .andExpect(jsonPath("$.available").value(true));
+  }
+
+  @Test
+  void populationBelowThePeopleAffectedIsRejected() throws Exception {
+    String zoneId = idOf(registerZone(registerEmergency(), "Quebrada Pedregal", null, "SEVERE"));
+
+    mockMvc
+        .perform(
+            patch("/api/v1/zones/" + zoneId + "/population-impact")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"population\": 100}"))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(
+            jsonPath("$.detail").value("peopleAffected cannot be greater than population."));
+  }
+
+  @Test
+  void reportOfAZoneIsExportedAsPdf() throws Exception {
+    String zoneId = idOf(registerZone(registerEmergency(), "Sector Alto Perú", 600, "SEVERE"));
+
+    mockMvc
+        .perform(get("/api/v1/zones/" + zoneId + "/report"))
+        .andExpect(status().isOk())
+        .andExpect(content().contentType(MediaType.APPLICATION_PDF))
+        .andExpect(
+            header()
+                .string(
+                    HttpHeaders.CONTENT_DISPOSITION,
+                    "attachment; filename=\"zone-report-" + zoneId + ".pdf\""))
+        .andExpect(content().string(startsWith("%PDF-")));
+  }
+
+  @Test
   void unknownZoneOrReportReturnsNotFound() throws Exception {
     UUID unknown = UUID.randomUUID();
 
     mockMvc.perform(get("/api/v1/zones/" + unknown + "/score")).andExpect(status().isNotFound());
+    mockMvc.perform(get("/api/v1/zones/" + unknown + "/report")).andExpect(status().isNotFound());
+    mockMvc
+        .perform(
+            patch("/api/v1/zones/" + unknown + "/population-impact")
+                .contentType(MediaType.APPLICATION_JSON)
+                .content("{\"population\": 600}"))
+        .andExpect(status().isNotFound());
     mockMvc.perform(post("/api/v1/zones/" + unknown + "/score")).andExpect(status().isNotFound());
     mockMvc
         .perform(post("/api/v1/field-reports/" + unknown + "/structure"))

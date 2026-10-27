@@ -8,11 +8,13 @@ import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.Calcu
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterFieldReportCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterZoneCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.StructureFieldReportCommandHandler;
+import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.UpdateZonePopulationImpactCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.AssignFieldReportZoneCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.CalculateUrgencyScoreCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterFieldReportCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterZoneCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.StructureFieldReportCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.commands.UpdateZonePopulationImpactCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportByIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneRankingQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.FieldReportQueryService;
@@ -21,6 +23,7 @@ import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneRan
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportAssignedToZone;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportProcessed;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportRegistered;
+import com.waqtalabs.auxia.emergencymanagement.domain.events.ZonePopulationImpactUpdated;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.ZoneRegistered;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportAlreadyProcessedException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportNotFoundException;
@@ -73,6 +76,8 @@ class UrgencyScoreUseCasesTests {
       new AssignFieldReportZoneCommandHandler(reports, zones, events::add);
   private final StructureFieldReportCommandHandler structure =
       new StructureFieldReportCommandHandler(reports, aiService, events::add);
+  private final UpdateZonePopulationImpactCommandHandler updateImpact =
+      new UpdateZonePopulationImpactCommandHandler(zones, events::add);
   private final CalculateUrgencyScoreCommandHandler calculateScore =
       new CalculateUrgencyScoreCommandHandler(zones, reports, aiService);
   private final ZoneQueryService zoneQueries = new ZoneQueryService(emergencies, zones, reports);
@@ -175,6 +180,20 @@ class UrgencyScoreUseCasesTests {
     assertThatThrownBy(() -> calculateScore.handle(new CalculateUrgencyScoreCommand(zone.id())))
         .isInstanceOf(InsufficientScoringDataException.class);
     assertThat(aiService.scoringCalls()).isEmpty();
+  }
+
+  @Test
+  void populationAddedLaterKeepsTheOtherCountsAndAllowsTheScore() {
+    Zone zone = zone("Quebrada Pedregal", null, 140, DamageLevel.SEVERE);
+
+    Zone updated =
+        updateImpact.handle(
+            new UpdateZonePopulationImpactCommand(zone.id(), 700, null, 150, null, null, null));
+
+    assertThat(updated.populationImpact()).isEqualTo(new PopulationImpact(700, 35, 150, 40, 15, 0));
+    assertThat(events).endsWith(new ZonePopulationImpactUpdated(zone.id()));
+    assertThat(calculateScore.handle(new CalculateUrgencyScoreCommand(zone.id())).urgencyScore())
+        .isPresent();
   }
 
   @Test

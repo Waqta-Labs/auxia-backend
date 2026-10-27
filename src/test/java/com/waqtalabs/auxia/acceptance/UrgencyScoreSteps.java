@@ -13,11 +13,16 @@ import io.cucumber.java.Before;
 import io.cucumber.java.es.Cuando;
 import io.cucumber.java.es.Dado;
 import io.cucumber.java.es.Entonces;
+import java.io.IOException;
 import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
+import org.openpdf.text.pdf.PdfReader;
+import org.openpdf.text.pdf.parser.PdfTextExtractor;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 
 /**
  * Steps of US-02, US-04, US-05, US-06 and TS-02. The AI Service is {@link FakeAiService}: what the
@@ -105,6 +110,13 @@ public class UrgencyScoreSteps {
     scenario.send(get(score(scenario.zoneId(zoneName))));
   }
 
+  @Cuando("la autoridad exporta el reporte de la zona {string}")
+  public void theAuthorityExportsTheReport(String zoneName) throws Exception {
+    scenario.send(
+        get("/api/v1/zones/" + scenario.zoneId(zoneName) + "/report")
+            .header(HttpHeaders.ACCEPT_LANGUAGE, "es-PE"));
+  }
+
   @Cuando("se envía una solicitud GET del score de la zona {string}")
   public void aGetOfTheScoreIsSent(String zoneName) throws Exception {
     scenario.send(get(score(scenario.zoneId(zoneName))));
@@ -157,6 +169,19 @@ public class UrgencyScoreSteps {
     assertThat(scenario.<String>read("$.modelVersion")).isNotBlank();
   }
 
+  @Entonces("el documento exportado incluye las variables que más influyeron en el score")
+  public void theExportedDocumentIncludesTheTopFeatures() throws IOException {
+    assertThat(scenario.response().getStatus()).isEqualTo(200);
+    assertThat(scenario.response().getContentType()).isEqualTo(MediaType.APPLICATION_PDF_VALUE);
+    String text = pdfText(scenario.response().getContentAsByteArray()).replaceAll("\s", "");
+    // FakeAiService: 40 × 0.75 (SEVERE) and 60 × 140 / 600, with the labels of the document.
+    assertThat(text)
+        .contains("Variablesquemásinfluyeron")
+        .contains("Niveldedaño30.0")
+        .contains("Personasafectadas14.0")
+        .contains(FakeAiService.MODEL_VERSION);
+  }
+
   @Entonces("el endpoint responde con código 200, el score calculado y sus variables explicativas")
   public void theEndpointRespondsWithTheScore() throws Exception {
     assertThat(scenario.response().getStatus()).isEqualTo(200);
@@ -177,6 +202,17 @@ public class UrgencyScoreSteps {
   @Entonces("solo se muestran las zonas {string}")
   public void onlyTheseZonesAreShown(String names) throws Exception {
     assertThat(rankedZoneNames()).containsExactlyElementsOf(split(names));
+  }
+
+  private static String pdfText(byte[] pdf) throws IOException {
+    try (var reader = new PdfReader(pdf)) {
+      var extractor = new PdfTextExtractor(reader);
+      var text = new StringBuilder();
+      for (int page = 1; page <= reader.getNumberOfPages(); page++) {
+        text.append(extractor.getTextFromPage(page));
+      }
+      return text.toString();
+    }
   }
 
   private List<String> rankedZoneNames() throws Exception {
