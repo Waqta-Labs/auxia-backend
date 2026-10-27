@@ -4,14 +4,24 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyClosedException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.InsufficientScoringDataException;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AdministrativeLocation;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyType;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PriorityLevel;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ScoreContribution;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyIndicators;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneStatus;
 import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class ZoneTests {
@@ -72,6 +82,92 @@ class ZoneTests {
   }
 
   @Test
+  void registeredZoneHasNoUrgencyScore() {
+    Zone zone = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
+
+    assertThat(zone.urgencyScore()).isEmpty();
+  }
+
+  @Test
+  void zoneWithoutPopulationHasNoScoreAvailable() {
+    Zone known = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
+    Zone unknown =
+        emergency.registerZone(
+            "Quebrada Pedregal", null, new PopulationImpact(null, 0, 0, 0, 0, 0), DamageLevel.LOW);
+
+    assertThat(known.hasSufficientDataForScoring()).isTrue();
+    assertThat(unknown.hasSufficientDataForScoring()).isFalse();
+    assertThatThrownBy(() -> unknown.urgencyIndicators(List.of()))
+        .isInstanceOf(InsufficientScoringDataException.class);
+  }
+
+  @Test
+  void withoutReportsTheIndicatorsAreTheDataOfTheZone() {
+    Zone zone = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
+
+    assertThat(zone.urgencyIndicators(List.of()))
+        .isEqualTo(new UrgencyIndicators(DamageLevel.SEVERE, 600, 35, 140, 40, 15, 0, Set.of()));
+  }
+
+  @Test
+  void indicatorsTakeTheMostSevereValueBetweenTheZoneAndItsReports() {
+    Zone zone = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
+    var critical =
+        new StructuredFieldData(
+            DamageLevel.CRITICAL, 20, 200, null, 30, 4, Set.of(Need.WATER), List.of());
+    var lowerCounts =
+        new StructuredFieldData(
+            DamageLevel.MODERATE, 50, 90, 10, null, null, Set.of(Need.FOOD), List.of());
+
+    UrgencyIndicators indicators = zone.urgencyIndicators(List.of(critical, lowerCounts));
+
+    assertThat(indicators)
+        .isEqualTo(
+            new UrgencyIndicators(
+                DamageLevel.CRITICAL, 600, 50, 200, 40, 30, 4, Set.of(Need.WATER, Need.FOOD)));
+  }
+
+  @Test
+  void aReportWithLowerValuesDoesNotLowerTheIndicators() {
+    Zone zone = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
+    var mild =
+        new StructuredFieldData(DamageLevel.LOW, 1, 2, 0, 0, 0, Set.of(), List.of());
+
+    assertThat(zone.urgencyIndicators(List.of(mild)))
+        .isEqualTo(zone.urgencyIndicators(List.of()));
+  }
+
+  @Test
+  void zoneGetsItsPopulationLaterAndThenHasDataForScoring() {
+    Zone zone =
+        emergency.registerZone(
+            "Quebrada Pedregal", null, new PopulationImpact(null, 0, 20, 0, 0, 0), DamageLevel.LOW);
+    var known = new PopulationImpact(300, 5, 20, 0, 0, 0);
+
+    zone.updatePopulationImpact(known);
+
+    assertThat(zone.populationImpact()).isEqualTo(known);
+    assertThat(zone.hasSufficientDataForScoring()).isTrue();
+  }
+
+  @Test
+  void updatingTheScorePrioritizesTheZone() {
+    Zone zone = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
+    var score =
+        new UrgencyScore(
+            54.9,
+            PriorityLevel.HIGH,
+            List.of(new ScoreContribution("damageLevel", 30.0)),
+            "rules-v1",
+            LocalDateTime.of(2026, 3, 14, 9, 30));
+
+    zone.updateUrgencyScore(score);
+
+    assertThat(zone.urgencyScore()).contains(score);
+    assertThat(zone.status()).isEqualTo(ZoneStatus.PRIORITIZED);
+  }
+
+  @Test
   void reconstitutedZoneKeepsItsStatus() {
     Zone stored = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
 
@@ -83,7 +179,8 @@ class ZoneTests {
             ALTO_PERU,
             stored.populationImpact(),
             stored.damageLevel(),
-            ZoneStatus.PRIORITIZED);
+            ZoneStatus.PRIORITIZED,
+            null);
 
     assertThat(zone.id()).isEqualTo(stored.id());
     assertThat(zone.status()).isEqualTo(ZoneStatus.PRIORITIZED);

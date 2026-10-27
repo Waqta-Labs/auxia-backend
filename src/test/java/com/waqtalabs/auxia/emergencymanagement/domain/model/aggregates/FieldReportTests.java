@@ -4,20 +4,27 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportAlreadyAssignedException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportAlreadyProcessedException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.ZoneOutsideEmergencyException;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AdministrativeLocation;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyType;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ReportSource;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.List;
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class FieldReportTests {
 
   private static final LocalDateTime REPORTED_AT = LocalDateTime.of(2026, 3, 14, 9, 30);
   private static final String TEXT = "Derrumbe de viviendas en el sector Alto Perú.";
+  private static final StructuredFieldData STRUCTURED =
+      new StructuredFieldData(
+          DamageLevel.SEVERE, null, null, null, null, null, Set.of(), List.of("peopleAffected"));
 
   private final Emergency emergency = emergency("Huaico Chosica 2026");
   private final Zone zone =
@@ -71,6 +78,33 @@ class FieldReportTests {
   }
 
   @Test
+  void registeredReportIsNotProcessed() {
+    FieldReport report = register();
+
+    assertThat(report.isProcessed()).isFalse();
+    assertThat(report.structuredData()).isEmpty();
+  }
+
+  @Test
+  void markingAsProcessedStoresTheStructuredData() {
+    FieldReport report = register();
+
+    report.markProcessed(STRUCTURED);
+
+    assertThat(report.isProcessed()).isTrue();
+    assertThat(report.structuredData()).contains(STRUCTURED);
+  }
+
+  @Test
+  void reportIsStructuredOnlyOnce() {
+    FieldReport report = register();
+    report.markProcessed(STRUCTURED);
+
+    assertThatThrownBy(() -> report.markProcessed(STRUCTURED))
+        .isInstanceOf(FieldReportAlreadyProcessedException.class);
+  }
+
+  @Test
   void blankTextIsRejected() {
     assertThatThrownBy(
             () -> FieldReport.register(emergency.id(), "  ", ReportSource.CITIZEN, REPORTED_AT))
@@ -88,7 +122,8 @@ class FieldReportTests {
             zone.id(),
             stored.rawText(),
             stored.source(),
-            stored.reportedAt());
+            stored.reportedAt(),
+            null);
 
     assertThat(report.id()).isEqualTo(stored.id());
     assertThat(report.zoneId()).contains(zone.id());

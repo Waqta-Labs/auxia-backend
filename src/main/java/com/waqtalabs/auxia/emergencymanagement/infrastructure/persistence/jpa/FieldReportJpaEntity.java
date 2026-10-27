@@ -8,13 +8,16 @@ import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
+import org.hibernate.annotations.JdbcTypeCode;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Row of {@code emergency_management.field_reports}. Only {@link FieldReportJpaMapper} uses it.
  *
- * <p>The structured data of the NLP is not mapped yet: Hibernate leaves those columns untouched
- * until the AI Service integration.
+ * <p>The two JSONB columns hold the structured data of the NLP. Both are {@code null} while the
+ * report is not processed.
  */
 @Entity
 @Table(schema = "emergency_management", name = "field_reports")
@@ -36,6 +39,14 @@ class FieldReportJpaEntity {
 
   @Column(name = "reported_at")
   LocalDateTime reportedAt;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "extracted_indicators")
+  ExtractedIndicatorsJson extractedIndicators;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "missing_variables")
+  List<String> missingVariables;
 
   protected FieldReportJpaEntity() {}
 }
