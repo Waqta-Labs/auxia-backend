@@ -39,6 +39,13 @@ src/main/java/com/waqtalabs/auxia/
 │   └── infrastructure/
 │       ├── persistence/jpa/
 │       └── integration/aiservice/   # Anti-Corruption Layer to auxia-ai-service
+├── resourcemanagement/
+│   ├── domain/                      # Inventory with its StockItem and Reservation, exceptions
+│   ├── application/                 # inventory commands, handlers and InventoryQueryService
+│   ├── interfaces/
+│   │   ├── rest/                    # InventoryController
+│   │   └── acl/                     # ResourceManagementContextFacade for other contexts
+│   └── infrastructure/persistence/jpa/
 └── shared/
     ├── domain/                      # error categories (404, 409, 422) and DomainEvent
     ├── application/                 # DomainEventPublisher, ExternalServiceUnavailable (503)
@@ -163,6 +170,31 @@ without `zoneId`, its zone is identified from the text: when exactly one zone
 name of the emergency appears in it (ignoring case and accents), the report is
 associated to that zone; otherwise it stays pending zone assignment until the
 authority assigns it (US-01, scenario 2).
+
+### Inventory (Resource Management)
+
+| Method and path | Description |
+|---|---|
+| `POST /api/v1/inventories` | Create the inventory of an organization (one per organization). |
+| `GET /api/v1/inventories?organizationId=` | The inventory of an organization. |
+| `GET /api/v1/inventories/{id}` | Inventory with the on hand, reserved and available quantity of each resource (US-09, TS-03). Filter: `category`. |
+| `POST /api/v1/inventories/{id}/resources` | Register a resource, without stock. |
+| `POST /api/v1/inventories/{id}/resources/{resourceId}/restock` | Register the entry of a quantity received (US-08). |
+| `PATCH /api/v1/inventories/{id}/resources/{resourceId}/adjustment` | Add or remove a quantity with a reason. |
+
+- `available = onHand - reserved`: what is reserved for a distribution plan
+  cannot be distributed again (US-09, scenario 2). `belowMinimum` tells when the
+  available quantity is below the minimum stock of the resource.
+- No operation takes more than the available quantity: an adjustment that
+  removes too much answers 409 and changes nothing (TS-03). A restock or an
+  adjustment of 0, or a negative restock, answers 400 (US-08, scenario 2).
+- The reason of each adjustment is written to the log until the audit trail
+  exists (QAD-03).
+- Until Identity Access exists, the organization is sent in the body or the
+  query; it will then come from the JWT.
+- Other bounded contexts use `ResourceManagementContextFacade` in the same
+  process: available stock of an organization, and reserving or releasing the
+  resources of a distribution plan. A reservation holds every line or none.
 
 ## Urgency score
 
