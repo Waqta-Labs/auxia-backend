@@ -146,8 +146,10 @@ predictable double imported with `FakeAiServiceConfiguration`.
 | `POST /api/v1/emergencies/{emergencyId}/zones` | Register a zone of an active emergency. |
 | `GET /api/v1/emergencies/{emergencyId}/zones` | Urgency ranking of the zones (US-06). Filters: `minScore`, `maxScore`, `need`. |
 | `GET /api/v1/zones/{id}` | One zone, with its score and priority level. |
+| `PATCH /api/v1/zones/{id}/population-impact` | Change some counts of the population impact; the others keep their value. Recalculates the score. |
 | `GET /api/v1/zones/{id}/score` | Urgency score with its top features and model version, or why it is not available (TS-02, US-05). |
 | `POST /api/v1/zones/{id}/score` | Recalculate the urgency score of a zone. |
+| `GET /api/v1/zones/{id}/report` | PDF of the zone: impact, urgency score with the points of each variable, model version and field reports (US-05). |
 | `POST /api/v1/zones/{zoneId}/field-reports` | Register a field report of a zone (TS-01). |
 | `POST /api/v1/emergencies/{emergencyId}/field-reports` | Register a field report of an emergency, with or without `zoneId`. |
 | `GET /api/v1/zones/{zoneId}/field-reports` | Reports of a zone, from the most recent. |
@@ -178,13 +180,16 @@ decides what to send and when (TS-C04).
   does not change, and a new report never lowers its urgency.
 - **Not available.** A zone without `population` has no score (US-04, scenario
   2): `GET /zones/{id}/score` answers `available: false` with
-  `missingVariables: ["population"]`, and `POST` answers 422.
+  `missingVariables: ["population"]`, and `POST` answers 422. Adding the
+  population with `PATCH /zones/{id}/population-impact` calculates it.
 - **AI Service down.** Registering never fails because of it: the report stays
   `processed: false` and the zone keeps its previous score.
   `POST /field-reports/{id}/structure` and `POST /zones/{id}/score` process
   them again, and answer 503 while the service is still down.
 - **Explanation.** Every score keeps its `topFeatures`, the points each variable
-  added, and the `modelVersion` that calculated it (US-05).
+  added, and the `modelVersion` that calculated it (US-05). The PDF of
+  `GET /zones/{id}/report` includes them, in the language of `Accept-Language`
+  (OpenPDF).
 
 ## API conventions
 
