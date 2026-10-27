@@ -173,7 +173,7 @@ public class UrgencyScoreSteps {
   public void theExportedDocumentIncludesTheTopFeatures() throws IOException {
     assertThat(scenario.response().getStatus()).isEqualTo(200);
     assertThat(scenario.response().getContentType()).isEqualTo(MediaType.APPLICATION_PDF_VALUE);
-    String text = pdfText(scenario.response().getContentAsByteArray()).replaceAll("\s", "");
+    String text = pdfText(scenario.response().getContentAsByteArray()).replaceAll("\\s", "");
     // FakeAiService: 40 × 0.75 (SEVERE) and 60 × 140 / 600, with the labels of the document.
     assertThat(text)
         .contains("Variablesquemásinfluyeron")
