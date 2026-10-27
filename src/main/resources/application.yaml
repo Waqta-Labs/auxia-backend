@@ -55,7 +55,11 @@ info:
     version: '@project.version@'
 
 springdoc:
+  # On in every profile, prod included: the deployed API is tried from Swagger UI.
+  api-docs:
+    enabled: true
   swagger-ui:
+    enabled: true
     path: /swagger-ui.html
     tags-sorter: alpha
     operations-sorter: method
