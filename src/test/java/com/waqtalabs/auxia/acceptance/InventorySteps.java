@@ -1,5 +1,6 @@
 package com.waqtalabs.auxia.acceptance;
 
+import static com.waqtalabs.auxia.TestUsers.organizationAdmin;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
@@ -23,11 +24,12 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockHttpServletResponse;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /**
- * Steps of US-08, US-09 and TS-03. Each scenario creates the inventory of a new organization. The
- * reservation of a plan goes through ResourceManagementContextFacade, as Emergency Management will
- * do it.
+ * Steps of US-08, US-09 and TS-03. Each scenario creates the inventory of a new organization,
+ * signed in as its ORGANIZATION_ADMIN, who manages the stock. The reservation of a plan goes
+ * through ResourceManagementContextFacade, as Emergency Management will do it.
  */
 public class InventorySteps {
 
@@ -35,6 +37,7 @@ public class InventorySteps {
   @Autowired private ResourceManagementContextFacade facade;
 
   private final UUID organizationId = UUID.randomUUID();
+  private final RequestPostProcessor administrator = organizationAdmin(organizationId);
   private final Map<String, String> resourceIds = new HashMap<>();
   private String inventoryId;
   private MockHttpServletResponse response;
@@ -69,7 +72,11 @@ public class InventorySteps {
   @Cuando("la autoridad consulta el inventario")
   @Cuando("se envía una solicitud GET del inventario")
   public void theInventoryIsRequested() throws Exception {
-    response = mockMvc.perform(get("/api/v1/inventories/" + inventoryId)).andReturn().getResponse();
+    response =
+        mockMvc
+            .perform(get("/api/v1/inventories/" + inventoryId).with(administrator))
+            .andReturn()
+            .getResponse();
   }
 
   @Cuando("se envía una solicitud para reducir {string} en {int} unidades")
@@ -129,8 +136,7 @@ public class InventorySteps {
   private void createInventory() throws Exception {
     send(
         post("/api/v1/inventories"),
-        "{\"organizationId\": \"%s\", \"name\": \"Almacén Central Lima\"}"
-            .formatted(organizationId));
+        "{\"name\": \"Almacén Central Lima\"}");
     assertThat(response.getStatus()).isEqualTo(201);
     inventoryId = JsonPath.read(response.getContentAsString(), "$.id");
   }
@@ -147,7 +153,10 @@ public class InventorySteps {
 
   private Map<String, Integer> availableByResource() throws Exception {
     MockHttpServletResponse inventory =
-        mockMvc.perform(get("/api/v1/inventories/" + inventoryId)).andReturn().getResponse();
+        mockMvc
+            .perform(get("/api/v1/inventories/" + inventoryId).with(administrator))
+            .andReturn()
+            .getResponse();
     return availableIn(inventory);
   }
 
@@ -170,7 +179,11 @@ public class InventorySteps {
   private void send(MockHttpServletRequestBuilder request, String body) throws Exception {
     response =
         mockMvc
-            .perform(request.contentType(MediaType.APPLICATION_JSON).content(body))
+            .perform(
+                request
+                    .with(administrator)
+                    .contentType(MediaType.APPLICATION_JSON)
+                    .content(body))
             .andReturn()
             .getResponse();
   }

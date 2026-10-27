@@ -79,10 +79,11 @@ class InventoryUseCasesTests {
     StockItem water = water(inventory);
 
     StockItem restocked =
-        restock.handle(new RestockResourceCommand(inventory.id(), water.resourceId(), 120));
+        restock.handle(
+            new RestockResourceCommand(inventory.id(), organization, water.resourceId(), 120));
 
     assertThat(restocked.stockLevel()).isEqualTo(new StockLevel(120, 0));
-    assertThat(queries.handle(new GetInventoryByIdQuery(inventory.id())).stockItems())
+    assertThat(queries.handle(new GetInventoryByIdQuery(inventory.id(), organization)).stockItems())
         .extracting(StockItem::available)
         .containsExactly(120);
   }
@@ -91,15 +92,19 @@ class InventoryUseCasesTests {
   void adjustmentBeyondTheAvailableQuantityChangesNothing() {
     Inventory inventory = create.handle(new CreateInventoryCommand(organization, "Almacén Lima"));
     StockItem water = water(inventory);
-    restock.handle(new RestockResourceCommand(inventory.id(), water.resourceId(), 10));
+    restock.handle(
+        new RestockResourceCommand(inventory.id(), organization, water.resourceId(), 10));
 
     assertThatThrownBy(
             () ->
                 adjust.handle(
-                    new AdjustStockCommand(inventory.id(), water.resourceId(), -11, "Pérdida")))
+                    new AdjustStockCommand(
+                        inventory.id(), organization, water.resourceId(), -11, "Pérdida")))
         .isInstanceOf(InsufficientStockException.class);
     StockItem adjusted =
-        adjust.handle(new AdjustStockCommand(inventory.id(), water.resourceId(), -4, "Pérdida"));
+        adjust.handle(
+            new AdjustStockCommand(
+                inventory.id(), organization, water.resourceId(), -4, "Pérdida"));
     assertThat(adjusted.available()).isEqualTo(6);
   }
 
@@ -107,7 +112,8 @@ class InventoryUseCasesTests {
   void planReservesAndReleasesItsResourcesWithTheCurrentTime() {
     Inventory inventory = create.handle(new CreateInventoryCommand(organization, "Almacén Lima"));
     StockItem water = water(inventory);
-    restock.handle(new RestockResourceCommand(inventory.id(), water.resourceId(), 100));
+    restock.handle(
+        new RestockResourceCommand(inventory.id(), organization, water.resourceId(), 100));
 
     reserve.handle(
         new ReserveResourcesCommand(
@@ -136,13 +142,18 @@ class InventoryUseCasesTests {
   void unknownInventoryOrReservationIsNotFound() {
     InventoryId unknown = InventoryId.generate();
 
-    assertThatThrownBy(() -> queries.handle(new GetInventoryByIdQuery(unknown)))
+    assertThatThrownBy(() -> queries.handle(new GetInventoryByIdQuery(unknown, organization)))
         .isInstanceOf(InventoryNotFoundException.class);
     assertThatThrownBy(
             () ->
                 registerResource.handle(
                     new RegisterResourceCommand(
-                        unknown, "Agua", ResourceCategory.WATER, UnitOfMeasure.UNIT, 0)))
+                        unknown,
+                        organization,
+                        "Agua",
+                        ResourceCategory.WATER,
+                        UnitOfMeasure.UNIT,
+                        0)))
         .isInstanceOf(InventoryNotFoundException.class);
     assertThatThrownBy(() -> release.handle(new ReleaseReservationCommand(plan)))
         .isInstanceOf(ReservationNotFoundException.class);
@@ -150,9 +161,33 @@ class InventoryUseCasesTests {
         .isInstanceOf(OrganizationInventoryNotFoundException.class);
   }
 
+  @Test
+  void inventoryOfAnotherOrganizationIsNotFound() {
+    Inventory inventory = create.handle(new CreateInventoryCommand(organization, "Almacén Lima"));
+    StockItem water = water(inventory);
+    var otherOrganization = new OrganizationId(UUID.randomUUID());
+
+    assertThatThrownBy(
+            () -> queries.handle(new GetInventoryByIdQuery(inventory.id(), otherOrganization)))
+        .isInstanceOf(InventoryNotFoundException.class);
+    assertThatThrownBy(
+            () ->
+                restock.handle(
+                    new RestockResourceCommand(
+                        inventory.id(), otherOrganization, water.resourceId(), 10)))
+        .isInstanceOf(InventoryNotFoundException.class);
+    Inventory unchanged = inventories.findById(inventory.id()).orElseThrow();
+    assertThat(unchanged.availableQuantityOf(water.resourceId())).isZero();
+  }
+
   private StockItem water(Inventory inventory) {
     return registerResource.handle(
         new RegisterResourceCommand(
-            inventory.id(), "Agua 2.5 L", ResourceCategory.WATER, UnitOfMeasure.UNIT, 50));
+            inventory.id(),
+            organization,
+            "Agua 2.5 L",
+            ResourceCategory.WATER,
+            UnitOfMeasure.UNIT,
+            50));
   }
 }

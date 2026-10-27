@@ -1,5 +1,8 @@
 package com.waqtalabs.auxia.resourcemanagement.interfaces.rest;
 
+import static com.waqtalabs.auxia.TestUsers.authority;
+import static com.waqtalabs.auxia.TestUsers.member;
+import static com.waqtalabs.auxia.TestUsers.organizationAdmin;
 import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.startsWith;
@@ -23,8 +26,10 @@ import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 import org.springframework.test.web.servlet.request.MockHttpServletRequestBuilder;
+import org.springframework.test.web.servlet.request.RequestPostProcessor;
 import org.springframework.transaction.annotation.Transactional;
 
+/** Each test signs in as the ORGANIZATION_ADMIN of a new organization. */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
@@ -39,11 +44,12 @@ class InventoryControllerTests {
 
   @Autowired private MockMvc mockMvc;
 
-  @Test
-  void createReturnsCreatedWithAnEmptyInventory() throws Exception {
-    UUID organizationId = UUID.randomUUID();
+  private final UUID organizationId = UUID.randomUUID();
+  private final RequestPostProcessor administrator = organizationAdmin(organizationId);
 
-    createInventory(organizationId)
+  @Test
+  void createReturnsCreatedWithAnEmptyInventoryOfTheOrganizationOfTheUser() throws Exception {
+    createInventory()
         .andExpect(status().isCreated())
         .andExpect(header().string(HttpHeaders.LOCATION, startsWith(INVENTORIES + "/")))
         .andExpect(jsonPath("$.organizationId").value(organizationId.toString()))
@@ -53,10 +59,9 @@ class InventoryControllerTests {
 
   @Test
   void secondInventoryOfAnOrganizationReturnsConflict() throws Exception {
-    UUID organizationId = UUID.randomUUID();
-    createInventory(organizationId).andExpect(status().isCreated());
+    createInventory().andExpect(status().isCreated());
 
-    createInventory(organizationId)
+    createInventory()
         .andExpect(status().isConflict())
         .andExpect(
             jsonPath("$.detail")
@@ -68,13 +73,12 @@ class InventoryControllerTests {
     mockMvc
         .perform(json(post(INVENTORIES), "{\"name\": \"\"}"))
         .andExpect(status().isBadRequest())
-        .andExpect(jsonPath("$.errors[*].field").value(hasItem("organizationId")))
         .andExpect(jsonPath("$.errors[*].field").value(hasItem("name")));
   }
 
   @Test
   void registeredResourceStartsWithoutStockAndBelowItsMinimum() throws Exception {
-    String inventoryId = idOf(createInventory(UUID.randomUUID()));
+    String inventoryId = idOf(createInventory());
 
     mockMvc
         .perform(json(post(resources(inventoryId)), WATER))
@@ -93,7 +97,7 @@ class InventoryControllerTests {
 
   @Test
   void restockUpdatesTheAvailableQuantity() throws Exception {
-    String inventoryId = idOf(createInventory(UUID.randomUUID()));
+    String inventoryId = idOf(createInventory());
     String resourceId = resourceIdOf(inventoryId, WATER);
 
     restock(inventoryId, resourceId, "{\"quantity\": 120}")
@@ -105,7 +109,7 @@ class InventoryControllerTests {
 
   @Test
   void restockWithAnInvalidQuantityIsRejectedAndChangesNothing() throws Exception {
-    String inventoryId = idOf(createInventory(UUID.randomUUID()));
+    String inventoryId = idOf(createInventory());
     String resourceId = resourceIdOf(inventoryId, WATER);
     restock(inventoryId, resourceId, "{\"quantity\": 10}").andExpect(status().isOk());
 
@@ -115,13 +119,13 @@ class InventoryControllerTests {
     restock(inventoryId, resourceId, "{}").andExpect(status().isBadRequest());
 
     mockMvc
-        .perform(get(INVENTORIES + "/" + inventoryId))
+        .perform(get(INVENTORIES + "/" + inventoryId).with(administrator))
         .andExpect(jsonPath("$.stockItems[0].available").value(10));
   }
 
   @Test
   void adjustmentAddsOrRemovesWithinTheAvailableQuantity() throws Exception {
-    String inventoryId = idOf(createInventory(UUID.randomUUID()));
+    String inventoryId = idOf(createInventory());
     String resourceId = resourceIdOf(inventoryId, WATER);
     restock(inventoryId, resourceId, "{\"quantity\": 100}").andExpect(status().isOk());
 
@@ -143,34 +147,33 @@ class InventoryControllerTests {
 
   @Test
   void inventoryListsItsResourcesByNameAndFiltersByCategory() throws Exception {
-    UUID organizationId = UUID.randomUUID();
-    String inventoryId = idOf(createInventory(organizationId));
+    String inventoryId = idOf(createInventory());
     resourceIdOf(
         inventoryId, "{\"name\": \"Kit de alimentos\", \"category\": \"FOOD\", \"unit\": \"KIT\"}");
     resourceIdOf(inventoryId, WATER);
 
     mockMvc
-        .perform(get(INVENTORIES + "/" + inventoryId))
+        .perform(get(INVENTORIES + "/" + inventoryId).with(administrator))
         .andExpect(status().isOk())
         .andExpect(
             jsonPath("$.stockItems[*].name").value(contains("Agua 2.5 L", "Kit de alimentos")));
     mockMvc
-        .perform(get(INVENTORIES + "/" + inventoryId).param("category", "FOOD"))
+        .perform(get(INVENTORIES + "/" + inventoryId).param("category", "FOOD").with(administrator))
         .andExpect(jsonPath("$.stockItems[*].name").value(contains("Kit de alimentos")));
     mockMvc
-        .perform(get(INVENTORIES).param("organizationId", organizationId.toString()))
+        .perform(get(INVENTORIES).with(administrator))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.id").value(inventoryId));
   }
 
   @Test
   void unknownInventoryOrResourceReturnsNotFound() throws Exception {
-    String inventoryId = idOf(createInventory(UUID.randomUUID()));
     UUID unknown = UUID.randomUUID();
+    mockMvc.perform(get(INVENTORIES).with(administrator)).andExpect(status().isNotFound());
+    String inventoryId = idOf(createInventory());
 
-    mockMvc.perform(get(INVENTORIES + "/" + unknown)).andExpect(status().isNotFound());
     mockMvc
-        .perform(get(INVENTORIES).param("organizationId", unknown.toString()))
+        .perform(get(INVENTORIES + "/" + unknown).with(administrator))
         .andExpect(status().isNotFound());
     restock(inventoryId, unknown.toString(), "{\"quantity\": 1}")
         .andExpect(status().isNotFound())
@@ -180,12 +183,51 @@ class InventoryControllerTests {
                     "Resource " + unknown + " does not exist in inventory " + inventoryId + "."));
   }
 
-  private ResultActions createInventory(UUID organizationId) throws Exception {
-    return mockMvc.perform(
-        json(
-            post(INVENTORIES),
-            "{\"organizationId\": \"%s\", \"name\": \"Almacén Central Lima\"}"
-                .formatted(organizationId)));
+  @Test
+  void inventoryOfAnotherOrganizationIsNotFound() throws Exception {
+    String inventoryId = idOf(createInventory());
+    String resourceId = resourceIdOf(inventoryId, WATER);
+    RequestPostProcessor otherAdministrator = organizationAdmin(UUID.randomUUID());
+
+    mockMvc
+        .perform(get(INVENTORIES + "/" + inventoryId).with(otherAdministrator))
+        .andExpect(status().isNotFound());
+    mockMvc
+        .perform(
+            json(post(resources(inventoryId) + "/" + resourceId + "/restock"), "{\"quantity\": 5}")
+                .with(otherAdministrator))
+        .andExpect(status().isNotFound());
+  }
+
+  @Test
+  void otherMembersOfTheOrganizationReadTheInventoryButDoNotChangeIt() throws Exception {
+    String inventoryId = idOf(createInventory());
+    String resourceId = resourceIdOf(inventoryId, WATER);
+
+    mockMvc
+        .perform(get(INVENTORIES + "/" + inventoryId).with(member(organizationId, "AUDITOR")))
+        .andExpect(status().isOk());
+    mockMvc
+        .perform(
+            json(post(resources(inventoryId) + "/" + resourceId + "/restock"), "{\"quantity\": 5}")
+                .with(member(organizationId, "AUDITOR")))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.status").value(403));
+    mockMvc
+        .perform(json(post(INVENTORIES), "{\"name\": \"Almacén\"}").with(authority()))
+        .andExpect(status().isForbidden());
+  }
+
+  @Test
+  void requestWithoutTokenReturnsUnauthorized() throws Exception {
+    mockMvc
+        .perform(get(INVENTORIES))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.status").value(401));
+  }
+
+  private ResultActions createInventory() throws Exception {
+    return mockMvc.perform(json(post(INVENTORIES), "{\"name\": \"Almacén Central Lima\"}"));
   }
 
   private String resourceIdOf(String inventoryId, String resource) throws Exception {
@@ -215,9 +257,9 @@ class InventoryControllerTests {
     return INVENTORIES + "/" + inventoryId + "/resources";
   }
 
-  private static MockHttpServletRequestBuilder json(
-      MockHttpServletRequestBuilder request, String body) {
-    return request.contentType(MediaType.APPLICATION_JSON).content(body);
+  /** A JSON request of the administrator; a later {@code with(...)} replaces the user. */
+  private MockHttpServletRequestBuilder json(MockHttpServletRequestBuilder request, String body) {
+    return request.with(administrator).contentType(MediaType.APPLICATION_JSON).content(body);
   }
 
   private static String idOf(ResultActions result) throws Exception {

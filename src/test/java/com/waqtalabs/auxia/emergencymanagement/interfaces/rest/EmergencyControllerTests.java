@@ -1,16 +1,20 @@
 package com.waqtalabs.auxia.emergencymanagement.interfaces.rest;
 
+import static com.waqtalabs.auxia.TestUsers.auditor;
+import static com.waqtalabs.auxia.TestUsers.fieldBrigade;
 import static org.hamcrest.Matchers.hasItem;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.startsWith;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
+import static org.springframework.security.test.web.servlet.request.SecurityMockMvcRequestPostProcessors.anonymous;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import com.waqtalabs.auxia.DefaultAuthorityUserConfiguration;
 import com.waqtalabs.auxia.TestcontainersConfiguration;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -25,7 +29,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, DefaultAuthorityUserConfiguration.class})
 @Transactional
 class EmergencyControllerTests {
 
@@ -162,6 +166,27 @@ class EmergencyControllerTests {
         .perform(patch(EMERGENCIES + "/" + id + "/close"))
         .andExpect(status().isConflict())
         .andExpect(jsonPath("$.detail").value("Emergency " + id + " is already closed."));
+  }
+
+  @Test
+  void onlyAnAuthorityChangesEmergenciesAndAnySignedInUserReadsThem() throws Exception {
+    String id = register();
+
+    mockMvc
+        .perform(
+            post(EMERGENCIES)
+                .with(fieldBrigade())
+                .contentType(MediaType.APPLICATION_JSON)
+                .content(CHOSICA_EMERGENCY))
+        .andExpect(status().isForbidden());
+    mockMvc
+        .perform(patch(EMERGENCIES + "/" + id + "/close").with(auditor()))
+        .andExpect(status().isForbidden());
+    mockMvc.perform(get(EMERGENCIES + "/" + id).with(auditor())).andExpect(status().isOk());
+    mockMvc
+        .perform(get(EMERGENCIES).with(anonymous()))
+        .andExpect(status().isUnauthorized())
+        .andExpect(jsonPath("$.title").value("Unauthorized"));
   }
 
   private String register() throws Exception {

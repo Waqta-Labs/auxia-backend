@@ -15,15 +15,21 @@ import com.waqtalabs.auxia.shared.domain.exceptions.ConflictException;
 import com.waqtalabs.auxia.shared.domain.exceptions.NotFoundException;
 import com.waqtalabs.auxia.shared.domain.exceptions.RuleViolationException;
 import com.waqtalabs.auxia.shared.infrastructure.i18n.LocalizationConfiguration;
-import com.waqtalabs.auxia.shared.infrastructure.security.WebSecurityConfiguration;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.boot.test.context.TestConfiguration;
 import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
+import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.AccessDeniedException;
+import org.springframework.security.authentication.AuthenticationCredentialsNotFoundException;
+import org.springframework.security.config.annotation.web.builders.HttpSecurity;
+import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
+import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -32,12 +38,13 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-// Only the sample controller: the controllers of the bounded contexts need their use cases.
+// Only the sample controller: the controllers of the bounded contexts need their use cases. The
+// security filter chain lets every request in, so each sample endpoint raises its own error.
 @WebMvcTest(GlobalExceptionHandlerTests.SampleController.class)
 @Import({
   GlobalExceptionHandlerTests.SampleController.class,
   LocalizationConfiguration.class,
-  WebSecurityConfiguration.class
+  GlobalExceptionHandlerTests.OpenSecurityConfiguration.class
 })
 class GlobalExceptionHandlerTests {
 
@@ -163,6 +170,36 @@ class GlobalExceptionHandlerTests {
         .andExpect(content().string(not(containsString("secret"))));
   }
 
+  @Test
+  void missingAuthenticationReturnsUnauthorized() throws Exception {
+    mockMvc
+        .perform(get(SAMPLES + "/security/unauthenticated"))
+        .andExpect(status().isUnauthorized())
+        .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.title").value("Unauthorized"))
+        .andExpect(jsonPath("$.detail").value("Sign in to use this endpoint."));
+  }
+
+  @Test
+  void missingRoleReturnsForbiddenInTheLanguageOfTheRequest() throws Exception {
+    mockMvc
+        .perform(get(SAMPLES + "/security/forbidden").header(HttpHeaders.ACCEPT_LANGUAGE, "es"))
+        .andExpect(status().isForbidden())
+        .andExpect(jsonPath("$.status").value(403))
+        .andExpect(jsonPath("$.title").value("Acceso denegado"));
+  }
+
+  @TestConfiguration(proxyBeanMethods = false)
+  static class OpenSecurityConfiguration {
+
+    @Bean
+    SecurityFilterChain openFilterChain(HttpSecurity http) throws Exception {
+      return http.csrf(AbstractHttpConfigurer::disable)
+          .authorizeHttpRequests(authorize -> authorize.anyRequest().permitAll())
+          .build();
+    }
+  }
+
   /** Controller used only by these tests to trigger each kind of error. */
   @RestController
   @RequestMapping(SAMPLES)
@@ -184,6 +221,16 @@ class GlobalExceptionHandlerTests {
     SampleResource failInExternalService() {
       throw new ExternalServiceUnavailableException(
           "AI Service", new IllegalStateException("secret connection detail"));
+    }
+
+    @GetMapping("/security/unauthenticated")
+    SampleResource failWithoutAuthentication() {
+      throw new AuthenticationCredentialsNotFoundException("No token");
+    }
+
+    @GetMapping("/security/forbidden")
+    SampleResource failWithoutRole() {
+      throw new AccessDeniedException("Access denied");
     }
 
     @GetMapping("/domain/{category}")
