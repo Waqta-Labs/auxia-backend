@@ -1,6 +1,7 @@
 package com.waqtalabs.auxia.emergencymanagement.infrastructure.persistence.jpa;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PriorityLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneStatus;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
@@ -8,16 +9,21 @@ import jakarta.persistence.EnumType;
 import jakarta.persistence.Enumerated;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
+import java.util.List;
 import java.util.UUID;
 import org.hibernate.annotations.CreationTimestamp;
+import org.hibernate.annotations.JdbcTypeCode;
 import org.hibernate.annotations.UpdateTimestamp;
+import org.hibernate.type.SqlTypes;
 
 /**
  * Row of {@code emergency_management.zones}. Only {@link ZoneJpaMapper} uses it.
  *
- * <p>The urgency score and the last aid received are not mapped yet: Hibernate leaves those
- * columns untouched until the phases that use them.
+ * <p>The {@code urgency_*} columns hold the UrgencyScore value object: all of them are {@code
+ * null} until the score is calculated. The last aid received is not mapped yet: Hibernate leaves
+ * that column untouched until the traceability phase.
  */
 @Entity
 @Table(schema = "emergency_management", name = "zones")
@@ -56,6 +62,23 @@ class ZoneJpaEntity {
 
   @Enumerated(EnumType.STRING)
   ZoneStatus status;
+
+  @Column(name = "urgency_score", precision = 5, scale = 2)
+  BigDecimal urgencyScore;
+
+  @Enumerated(EnumType.STRING)
+  @Column(name = "urgency_level")
+  PriorityLevel urgencyLevel;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "urgency_top_features")
+  List<ScoreContributionJson> urgencyTopFeatures;
+
+  @Column(name = "urgency_model_version")
+  String urgencyModelVersion;
+
+  @Column(name = "urgency_calculated_at")
+  LocalDateTime urgencyCalculatedAt;
 
   @CreationTimestamp
   @Column(name = "created_at", updatable = false)

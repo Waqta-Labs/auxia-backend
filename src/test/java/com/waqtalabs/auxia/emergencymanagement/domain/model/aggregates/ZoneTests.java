@@ -83,7 +83,8 @@ class ZoneTests {
             ALTO_PERU,
             stored.populationImpact(),
             stored.damageLevel(),
-            ZoneStatus.PRIORITIZED);
+            ZoneStatus.PRIORITIZED,
+            null);
 
     assertThat(zone.id()).isEqualTo(stored.id());
     assertThat(zone.status()).isEqualTo(ZoneStatus.PRIORITIZED);
