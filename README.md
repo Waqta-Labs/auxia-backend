@@ -108,7 +108,7 @@ empty database runs every migration from V1. The history table is
 | Profile | Use |
 |---|---|
 | `dev` (default) | Local development. `/actuator/health` answers `UP` or `DOWN` to anyone, and the status of each component, including the database, only to a signed-in user (`Authorization: Bearer <token>`). |
-| `prod` | Deployment. Health details are hidden and the port is read from `PORT` (default `8080`). |
+| `prod` | Deployment. Health details are hidden and the port is read from `PORT` (default `8080`). Swagger UI stays on, so the deployed API can be tried. |
 
 Activate a profile with `SPRING_PROFILES_ACTIVE=prod`.
 
