@@ -230,6 +230,25 @@ class UrgencyScoreUseCasesTests {
         .isInstanceOf(FieldReportNotFoundException.class);
   }
 
+  @Test
+  void needsOfARankedZoneJoinItsReportsInTheOrderOfTheEnumeration() {
+    Zone zone = zone("Sector Alto Perú", 600, 140, DamageLevel.SEVERE);
+    structureReport(zone, "Faltan carpas y medicinas", Set.of(Need.SHELTER, Need.MEDICINE));
+    structureReport(zone, "Urge agua potable y carpas", Set.of(Need.WATER, Need.SHELTER));
+
+    assertThat(zoneQueries.handle(GetZoneRankingQuery.all(emergency.id())).getFirst().needs())
+        .containsExactly(Need.WATER, Need.SHELTER, Need.MEDICINE);
+  }
+
+  private void structureReport(Zone zone, String text, Set<Need> needs) {
+    aiService.willStructure(
+        text, new StructuredFieldData(null, null, null, null, null, null, needs, List.of()));
+    FieldReport report =
+        registerReport.handle(
+            RegisterFieldReportCommand.forZone(zone.id(), text, ReportSource.AUTHORITY));
+    structure.handle(new StructureFieldReportCommand(report.id()));
+  }
+
   private List<ZoneId> rank(GetZoneRankingQuery query) {
     return zoneQueries.handle(query).stream().map(entry -> entry.zone().id()).toList();
   }
