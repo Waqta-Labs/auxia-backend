@@ -186,7 +186,6 @@ public final class Inventory {
     return name;
   }
 
-  /** In registration order. */
   public List<StockItem> stockItems() {
     return List.copyOf(stockItems);
   }
