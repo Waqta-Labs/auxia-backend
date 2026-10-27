@@ -26,11 +26,14 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldRe
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ReportSource;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
+import com.waqtalabs.auxia.shared.domain.events.DomainEvent;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class FieldReportUseCasesTests {
@@ -41,10 +44,11 @@ class FieldReportUseCasesTests {
   private final InMemoryEmergencyRepository emergencies = new InMemoryEmergencyRepository();
   private final InMemoryZoneRepository zones = new InMemoryZoneRepository();
   private final InMemoryFieldReportRepository reports = new InMemoryFieldReportRepository();
+  private final List<DomainEvent> events = new ArrayList<>();
   private final RegisterFieldReportCommandHandler register =
-      new RegisterFieldReportCommandHandler(emergencies, zones, reports, CLOCK);
+      new RegisterFieldReportCommandHandler(emergencies, zones, reports, CLOCK, events::add);
   private final AssignFieldReportZoneCommandHandler assign =
-      new AssignFieldReportZoneCommandHandler(reports, zones);
+      new AssignFieldReportZoneCommandHandler(reports, zones, events::add);
   private final FieldReportQueryService queries =
       new FieldReportQueryService(emergencies, zones, reports);
 

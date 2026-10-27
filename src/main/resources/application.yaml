@@ -33,6 +33,13 @@ spring:
       # Flyway owns the schema; Hibernate only checks that the entities match it.
       ddl-auto: validate
 
+auxia:
+  ai-service:
+    # auxia-ai-service structures field reports and calculates urgency scores (TS-C04).
+    # Its key must be the same AI_SERVICE_API_KEY that the AI Service expects.
+    base-url: ${AI_SERVICE_URL:http://localhost:8765}
+    api-key: ${AI_SERVICE_API_KEY}
+
 info:
   app:
     name: AuxIA Backend API
