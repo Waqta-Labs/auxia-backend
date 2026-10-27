@@ -1,5 +1,6 @@
 package com.waqtalabs.auxia.shared.interfaces.rest;
 
+import com.waqtalabs.auxia.shared.application.exceptions.AuthenticationFailedException;
 import com.waqtalabs.auxia.shared.application.exceptions.ExternalServiceUnavailableException;
 import com.waqtalabs.auxia.shared.domain.exceptions.ConflictException;
 import com.waqtalabs.auxia.shared.domain.exceptions.DomainException;
@@ -71,6 +72,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             .titleMessageCode(ErrorResponse.getDefaultTitleMessageCode(category))
             .detailMessageCode(ErrorResponse.getDefaultDetailMessageCode(ex.getClass(), null))
             .detailMessageArguments(ex.arguments())
+            .build()
+            .updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
+    return handleExceptionInternal(ex, body, new HttpHeaders(), status, request);
+  }
+
+  /**
+   * Wrong credentials: 401 with one generic message, whatever failed (US-21). The reason stays in
+   * the log only.
+   */
+  @ExceptionHandler(AuthenticationFailedException.class)
+  public ResponseEntity<Object> handleAuthenticationFailed(
+      AuthenticationFailedException ex, WebRequest request) {
+    LOGGER.info("Authentication failed: {}", ex.getMessage());
+    HttpStatus status = HttpStatus.UNAUTHORIZED;
+    ProblemDetail body =
+        ErrorResponse.builder(ex, status, "Invalid credentials.")
             .build()
             .updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
     return handleExceptionInternal(ex, body, new HttpHeaders(), status, request);
