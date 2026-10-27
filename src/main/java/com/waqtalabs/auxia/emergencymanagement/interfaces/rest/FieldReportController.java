@@ -28,6 +28,7 @@ import java.net.URI;
 import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -60,6 +61,7 @@ public class FieldReportController {
     this.fieldReportQueries = fieldReportQueries;
   }
 
+  @PreAuthorize("hasAnyRole('AUTHORITY', 'FIELD_BRIGADE')")
   @PostMapping("/zones/{zoneId}/field-reports")
   @Operation(
       summary = "Register a field report of a zone",
@@ -74,6 +76,7 @@ public class FieldReportController {
     return created(FieldReportResourceAssembler.toCommand(zoneId, request));
   }
 
+  @PreAuthorize("hasAnyRole('AUTHORITY', 'FIELD_BRIGADE')")
   @PostMapping("/emergencies/{emergencyId}/field-reports")
   @Operation(
       summary = "Register a field report of an emergency",
@@ -125,6 +128,7 @@ public class FieldReportController {
         fieldReportQueries.handle(new GetFieldReportByIdQuery(new FieldReportId(fieldReportId))));
   }
 
+  @PreAuthorize("hasAnyRole('AUTHORITY', 'FIELD_BRIGADE')")
   @PostMapping("/field-reports/{fieldReportId}/structure")
   @Operation(
       summary = "Structure a field report with NLP",
@@ -141,6 +145,7 @@ public class FieldReportController {
     return FieldReportResourceAssembler.toResource(structureFieldReport.handle(command));
   }
 
+  @PreAuthorize("hasRole('AUTHORITY')")
   @PatchMapping("/field-reports/{fieldReportId}/zone")
   @Operation(
       summary = "Assign the zone of a pending field report",

@@ -19,6 +19,7 @@ import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.AddStaff
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.BrigadeResource;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.ChangeAvailabilityRequest;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.CreateBrigadeRequest;
+import com.waqtalabs.auxia.shared.infrastructure.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -29,6 +30,8 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -39,6 +42,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Brigades of the organization of the signed-in user, which comes from the JWT. Any user of the
+ * organization reads them; only an ORGANIZATION_ADMIN changes them. A brigade of another
+ * organization is not found.
+ */
 @RestController
 @RequestMapping("/api/v1/brigades")
 @Tag(name = "Brigades", description = "Field brigades that deliver the distribution plans")
@@ -64,79 +72,97 @@ public class BrigadeController {
   }
 
   @PostMapping
+  @PreAuthorize("hasRole('ORGANIZATION_ADMIN')")
   @Operation(
       summary = "Create a brigade",
       description = "It starts AVAILABLE and without members. Names are unique per organization.")
   @ApiResponse(responseCode = "201", description = "Brigade created")
   @ApiResponse(responseCode = "400", description = "Invalid request")
   @ApiResponse(responseCode = "409", description = "The organization has a brigade with that name")
-  public ResponseEntity<BrigadeResource> create(@Valid @RequestBody CreateBrigadeRequest request) {
-    Brigade brigade = createBrigade.handle(BrigadeResourceAssembler.toCommand(request));
+  public ResponseEntity<BrigadeResource> create(
+      @Valid @RequestBody CreateBrigadeRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    Brigade brigade =
+        createBrigade.handle(BrigadeResourceAssembler.toCommand(organizationOf(user), request));
     return ResponseEntity.created(URI.create("/api/v1/brigades/" + brigade.id().value()))
         .body(BrigadeResourceAssembler.toResource(brigade));
   }
 
   @GetMapping
-  @Operation(
-      summary = "List the brigades of an organization",
-      description =
-          "Ordered by name. Until Identity Access exists, the organization is a query parameter.")
+  @Operation(summary = "List the brigades of the organization", description = "Ordered by name.")
   @ApiResponse(responseCode = "200", description = "Brigades of the organization")
-  public List<BrigadeResource> findByOrganization(
-      @RequestParam UUID organizationId,
+  public List<BrigadeResource> findOwn(
       @Parameter(description = "Only the brigades in this status")
           @RequestParam(required = false)
-          BrigadeStatus status) {
-    var query = new GetBrigadesByOrganizationIdQuery(new OrganizationId(organizationId), status);
+          BrigadeStatus status,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var query = new GetBrigadesByOrganizationIdQuery(organizationOf(user), status);
     return brigadeQueries.handle(query).stream().map(BrigadeResourceAssembler::toResource).toList();
   }
 
   @GetMapping("/{brigadeId}")
   @Operation(summary = "Get a brigade with its members and its assignment in progress")
   @ApiResponse(responseCode = "200", description = "Brigade found")
-  @ApiResponse(responseCode = "404", description = "The brigade does not exist")
-  public BrigadeResource findById(@PathVariable UUID brigadeId) {
-    return BrigadeResourceAssembler.toResource(
-        brigadeQueries.handle(new GetBrigadeByIdQuery(new BrigadeId(brigadeId))));
+  @ApiResponse(responseCode = "404", description = "Not a brigade of the organization")
+  public BrigadeResource findById(
+      @PathVariable UUID brigadeId, @AuthenticationPrincipal AuthenticatedUser user) {
+    var query = new GetBrigadeByIdQuery(new BrigadeId(brigadeId), organizationOf(user));
+    return BrigadeResourceAssembler.toResource(brigadeQueries.handle(query));
   }
 
   @PostMapping("/{brigadeId}/members")
+  @PreAuthorize("hasRole('ORGANIZATION_ADMIN')")
   @Operation(summary = "Add a member to a brigade")
   @ApiResponse(responseCode = "201", description = "Member added; the brigade is returned")
   @ApiResponse(responseCode = "400", description = "Invalid request")
-  @ApiResponse(responseCode = "404", description = "The brigade does not exist")
+  @ApiResponse(responseCode = "404", description = "Not a brigade of the organization")
   public ResponseEntity<BrigadeResource> addMember(
-      @PathVariable UUID brigadeId, @Valid @RequestBody AddStaffMemberRequest request) {
-    Brigade brigade =
-        addStaffMember.handle(BrigadeResourceAssembler.toCommand(brigadeId, request));
+      @PathVariable UUID brigadeId,
+      @Valid @RequestBody AddStaffMemberRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var command = BrigadeResourceAssembler.toCommand(brigadeId, organizationOf(user), request);
     return ResponseEntity.status(HttpStatus.CREATED)
-        .body(BrigadeResourceAssembler.toResource(brigade));
+        .body(BrigadeResourceAssembler.toResource(addStaffMember.handle(command)));
   }
 
   @DeleteMapping("/{brigadeId}/members/{memberId}")
+  @PreAuthorize("hasRole('ORGANIZATION_ADMIN')")
   @Operation(
       summary = "Remove a member from a brigade",
       description = "An assigned brigade keeps at least one LEADER.")
   @ApiResponse(responseCode = "200", description = "Member removed; the brigade is returned")
   @ApiResponse(responseCode = "404", description = "The brigade or the member does not exist")
   @ApiResponse(responseCode = "422", description = "It is the last leader of an assigned brigade")
-  public BrigadeResource removeMember(@PathVariable UUID brigadeId, @PathVariable UUID memberId) {
+  public BrigadeResource removeMember(
+      @PathVariable UUID brigadeId,
+      @PathVariable UUID memberId,
+      @AuthenticationPrincipal AuthenticatedUser user) {
     var command =
-        new RemoveStaffMemberCommand(new BrigadeId(brigadeId), new StaffMemberId(memberId));
+        new RemoveStaffMemberCommand(
+            new BrigadeId(brigadeId), organizationOf(user), new StaffMemberId(memberId));
     return BrigadeResourceAssembler.toResource(removeStaffMember.handle(command));
   }
 
   @PatchMapping("/{brigadeId}/availability")
+  @PreAuthorize("hasRole('ORGANIZATION_ADMIN')")
   @Operation(
       summary = "Put a brigade on or off duty",
       description = "Only AVAILABLE or OFF_DUTY, and only without an assignment in progress.")
   @ApiResponse(responseCode = "200", description = "Availability changed")
-  @ApiResponse(responseCode = "404", description = "The brigade does not exist")
+  @ApiResponse(responseCode = "404", description = "Not a brigade of the organization")
   @ApiResponse(responseCode = "409", description = "The brigade has an assignment in progress")
   @ApiResponse(responseCode = "422", description = "The new status is ASSIGNED")
   public BrigadeResource changeAvailability(
-      @PathVariable UUID brigadeId, @Valid @RequestBody ChangeAvailabilityRequest request) {
-    var command = new ChangeBrigadeAvailabilityCommand(new BrigadeId(brigadeId), request.status());
+      @PathVariable UUID brigadeId,
+      @Valid @RequestBody ChangeAvailabilityRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var command =
+        new ChangeBrigadeAvailabilityCommand(
+            new BrigadeId(brigadeId), organizationOf(user), request.status());
     return BrigadeResourceAssembler.toResource(changeAvailability.handle(command));
+  }
+
+  private static OrganizationId organizationOf(AuthenticatedUser user) {
+    return new OrganizationId(user.organizationId());
   }
 }

@@ -18,6 +18,7 @@ import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.Inventor
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.RegisterResourceRequest;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.RestockRequest;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.StockItemResource;
+import com.waqtalabs.auxia.shared.infrastructure.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -27,6 +28,8 @@ import java.net.URI;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -36,6 +39,11 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
+/**
+ * Inventory of the organization of the signed-in user, which comes from the JWT. Any user of the
+ * organization reads it; only an ORGANIZATION_ADMIN changes it. An inventory of another
+ * organization is not found.
+ */
 @RestController
 @RequestMapping("/api/v1/inventories")
 @Tag(name = "Inventories", description = "Stock of humanitarian resources (US-08, US-09, TS-03)")
@@ -61,27 +69,28 @@ public class InventoryController {
   }
 
   @PostMapping
+  @PreAuthorize("hasRole('ORGANIZATION_ADMIN')")
   @Operation(
-      summary = "Create the inventory of an organization",
+      summary = "Create the inventory of the organization",
       description = "Each organization has a single inventory, which starts without resources.")
   @ApiResponse(responseCode = "201", description = "Inventory created")
   @ApiResponse(responseCode = "400", description = "Invalid request")
   @ApiResponse(responseCode = "409", description = "The organization already has an inventory")
   public ResponseEntity<InventoryResource> create(
-      @Valid @RequestBody CreateInventoryRequest request) {
-    Inventory inventory = createInventory.handle(InventoryResourceAssembler.toCommand(request));
+      @Valid @RequestBody CreateInventoryRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    Inventory inventory =
+        createInventory.handle(InventoryResourceAssembler.toCommand(organizationOf(user), request));
     return ResponseEntity.created(URI.create("/api/v1/inventories/" + inventory.id().value()))
         .body(InventoryResourceAssembler.toResource(inventory, null));
   }
 
   @GetMapping
-  @Operation(
-      summary = "Get the inventory of an organization",
-      description = "Until Identity Access exists, the organization is a query parameter.")
+  @Operation(summary = "Get the inventory of the organization of the user")
   @ApiResponse(responseCode = "200", description = "Inventory of the organization")
   @ApiResponse(responseCode = "404", description = "The organization has no inventory")
-  public InventoryResource findByOrganization(@RequestParam UUID organizationId) {
-    var query = new GetInventoryByOrganizationIdQuery(new OrganizationId(organizationId));
+  public InventoryResource findOwn(@AuthenticationPrincipal AuthenticatedUser user) {
+    var query = new GetInventoryByOrganizationIdQuery(organizationOf(user));
     return InventoryResourceAssembler.toResource(inventoryQueries.handle(query), null);
   }
 
@@ -92,31 +101,37 @@ public class InventoryController {
           "available is what can still be distributed: the reserved quantity is held for"
               + " distribution plans (US-09, TS-03).")
   @ApiResponse(responseCode = "200", description = "Inventory found")
-  @ApiResponse(responseCode = "404", description = "The inventory does not exist")
+  @ApiResponse(responseCode = "404", description = "Not an inventory of the organization")
   public InventoryResource findById(
       @PathVariable UUID inventoryId,
       @Parameter(description = "Only the resources of this category")
           @RequestParam(required = false)
-          ResourceCategory category) {
+          ResourceCategory category,
+      @AuthenticationPrincipal AuthenticatedUser user) {
     Inventory inventory =
-        inventoryQueries.handle(new GetInventoryByIdQuery(new InventoryId(inventoryId)));
+        inventoryQueries.handle(
+            new GetInventoryByIdQuery(new InventoryId(inventoryId), organizationOf(user)));
     return InventoryResourceAssembler.toResource(inventory, category);
   }
 
   @PostMapping("/{inventoryId}/resources")
+  @PreAuthorize("hasRole('ORGANIZATION_ADMIN')")
   @Operation(summary = "Register a resource", description = "It starts without stock.")
   @ApiResponse(responseCode = "201", description = "Resource registered")
   @ApiResponse(responseCode = "400", description = "Invalid request")
-  @ApiResponse(responseCode = "404", description = "The inventory does not exist")
+  @ApiResponse(responseCode = "404", description = "Not an inventory of the organization")
   @ApiResponse(responseCode = "409", description = "A resource already has that name")
   public ResponseEntity<StockItemResource> registerResource(
-      @PathVariable UUID inventoryId, @Valid @RequestBody RegisterResourceRequest request) {
-    var command = InventoryResourceAssembler.toCommand(inventoryId, request);
+      @PathVariable UUID inventoryId,
+      @Valid @RequestBody RegisterResourceRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var command = InventoryResourceAssembler.toCommand(inventoryId, organizationOf(user), request);
     return ResponseEntity.status(HttpStatus.CREATED)
         .body(InventoryResourceAssembler.toResource(registerResource.handle(command)));
   }
 
   @PostMapping("/{inventoryId}/resources/{resourceId}/restock")
+  @PreAuthorize("hasRole('ORGANIZATION_ADMIN')")
   @Operation(
       summary = "Register the entry of a resource",
       description = "Adds a quantity received, such as a donation or a purchase (US-08).")
@@ -126,12 +141,16 @@ public class InventoryController {
   public StockItemResource restock(
       @PathVariable UUID inventoryId,
       @PathVariable UUID resourceId,
-      @Valid @RequestBody RestockRequest request) {
-    var command = InventoryResourceAssembler.toCommand(inventoryId, resourceId, request);
+      @Valid @RequestBody RestockRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var command =
+        InventoryResourceAssembler.toCommand(
+            inventoryId, organizationOf(user), resourceId, request);
     return InventoryResourceAssembler.toResource(restockResource.handle(command));
   }
 
   @PatchMapping("/{inventoryId}/resources/{resourceId}/adjustment")
+  @PreAuthorize("hasRole('ORGANIZATION_ADMIN')")
   @Operation(
       summary = "Adjust the stock of a resource",
       description =
@@ -144,8 +163,15 @@ public class InventoryController {
   public StockItemResource adjust(
       @PathVariable UUID inventoryId,
       @PathVariable UUID resourceId,
-      @Valid @RequestBody AdjustStockRequest request) {
-    var command = InventoryResourceAssembler.toCommand(inventoryId, resourceId, request);
+      @Valid @RequestBody AdjustStockRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var command =
+        InventoryResourceAssembler.toCommand(
+            inventoryId, organizationOf(user), resourceId, request);
     return InventoryResourceAssembler.toResource(adjustStock.handle(command));
+  }
+
+  private static OrganizationId organizationOf(AuthenticatedUser user) {
+    return new OrganizationId(user.organizationId());
   }
 }

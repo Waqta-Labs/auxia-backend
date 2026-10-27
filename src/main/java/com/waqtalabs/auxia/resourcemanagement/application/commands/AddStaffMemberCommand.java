@@ -1,6 +1,7 @@
 package com.waqtalabs.auxia.resourcemanagement.application.commands;
 
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.BrigadeId;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.StaffRole;
 
 /**
@@ -9,4 +10,8 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.StaffRol
  * @param phone optional
  */
 public record AddStaffMemberCommand(
-    BrigadeId brigadeId, String fullName, StaffRole role, String phone) {}
+    BrigadeId brigadeId,
+    OrganizationId organizationId,
+    String fullName,
+    StaffRole role,
+    String phone) {}

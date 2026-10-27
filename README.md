@@ -46,6 +46,15 @@ src/main/java/com/waqtalabs/auxia/
 │   │   ├── rest/                    # InventoryController, BrigadeController
 │   │   └── acl/                     # ResourceManagementContextFacade for other contexts
 │   └── infrastructure/persistence/jpa/
+├── identityaccess/
+│   ├── domain/                      # Organization and UserAccount, PasswordHashingService
+│   ├── application/                 # sign-in, organizations, users, CheckAccessQueryHandler
+│   ├── interfaces/
+│   │   ├── rest/                    # AuthenticationController, OrganizationController, UserAccountController
+│   │   └── acl/                     # IdentityAccessContextFacade for other contexts
+│   └── infrastructure/
+│       ├── persistence/jpa/
+│       └── security/                # JWT issue and check, BCrypt, filter chain
 └── shared/
     ├── domain/                      # error categories (404, 409, 422) and DomainEvent
     ├── application/                 # DomainEventPublisher, ExternalServiceUnavailable (503)
@@ -53,14 +62,15 @@ src/main/java/com/waqtalabs/auxia/
     │   ├── events/                  # domain events through Spring, in the same process
     │   ├── documentation/openapi/   # OpenAPI metadata for Swagger UI
     │   ├── i18n/                    # Accept-Language resolution (en_US, es_419)
-    │   ├── security/                # security filter chain
+    │   ├── security/                # AuthenticatedUser, the principal of every request
     │   └── time/                    # clock used by the use cases
     └── interfaces/rest/             # global error handling (problem details)
 ```
 
 ## Configuration
 
-The database and the AI Service are configured with environment variables:
+The database, the AI Service and the security are configured with environment
+variables:
 
 | Variable | Description |
 |---|---|
@@ -69,6 +79,8 @@ The database and the AI Service are configured with environment variables:
 | `DB_PASSWORD` | Database password |
 | `AI_SERVICE_URL` | URL of [auxia-ai-service](https://github.com/Waqta-Labs/auxia-ai-service). Default `http://localhost:8765` |
 | `AI_SERVICE_API_KEY` | Shared secret sent in `X-API-Key`. It must be the same `AI_SERVICE_API_KEY` of the AI Service. Required |
+| `AUTH_JWT_SECRET` | Base64 key that signs the access tokens, at least 32 bytes, e.g. `openssl rand -base64 32`. Required |
+| `PLATFORM_ADMIN_KEY` | Secret of the platform operator, sent in `X-Platform-Key` to register and suspend organizations. Required |
 
 For local development, copy `.env.example` to `.env` and fill in the values.
 The application imports `.env` from the working directory when it exists.
@@ -138,11 +150,22 @@ predictable double imported with `FakeAiServiceConfiguration`.
 | Level | Where |
 |---|---|
 | Domain | `*Tests` next to each aggregate and value object, without Spring |
-| Use cases | `emergencymanagement/application`, with in-memory repositories |
+| Use cases | `*/application`, with in-memory repositories |
 | Persistence and REST | `JpaRepositoriesTests`, `*ControllerTests` and the migration tests, on the container |
 | Acceptance | `src/test/resources/features/*.feature` (Gherkin of chapter III), run by `AcceptanceTests` |
 
+The endpoints need a signed-in user. Most REST tests and scenarios run as an
+`AUTHORITY` (`DefaultAuthorityUserConfiguration`) or pick another user with
+`TestUsers`. The Identity Access tests and the US-21 and US-22 scenarios sign in
+through the API and send the real token instead.
+
 ## Endpoints
+
+Every endpoint needs `Authorization: Bearer <token>`, except the sign-in, the
+platform operator endpoints, Swagger UI and the health check. Reads are open to
+any signed-in user; changes need a role (see [Roles](#roles)).
+
+### Emergencies, zones and field reports (Emergency Management)
 
 | Method and path | Description |
 |---|---|
@@ -175,8 +198,8 @@ authority assigns it (US-01, scenario 2).
 
 | Method and path | Description |
 |---|---|
-| `POST /api/v1/inventories` | Create the inventory of an organization (one per organization). |
-| `GET /api/v1/inventories?organizationId=` | The inventory of an organization. |
+| `POST /api/v1/inventories` | Create the inventory of the organization of the user (one per organization). |
+| `GET /api/v1/inventories` | The inventory of the organization of the user. |
 | `GET /api/v1/inventories/{id}` | Inventory with the on hand, reserved and available quantity of each resource (US-09, TS-03). Filter: `category`. |
 | `POST /api/v1/inventories/{id}/resources` | Register a resource, without stock. |
 | `POST /api/v1/inventories/{id}/resources/{resourceId}/restock` | Register the entry of a quantity received (US-08). |
@@ -190,8 +213,8 @@ authority assigns it (US-01, scenario 2).
   adjustment of 0, or a negative restock, answers 400 (US-08, scenario 2).
 - The reason of each adjustment is written to the log until the audit trail
   exists (QAD-03).
-- Until Identity Access exists, the organization is sent in the body or the
-  query; it will then come from the JWT.
+- The organization is the one of the signed-in user. An inventory of another
+  organization answers 404.
 - Other bounded contexts use `ResourceManagementContextFacade` in the same
   process: available stock of an organization, and reserving or releasing the
   resources of a distribution plan. A reservation holds every line or none.
@@ -200,20 +223,60 @@ authority assigns it (US-01, scenario 2).
 
 | Method and path | Description |
 |---|---|
-| `POST /api/v1/brigades` | Create a brigade with its base location. It starts `AVAILABLE`. |
-| `GET /api/v1/brigades?organizationId=&status=` | Brigades of an organization by name, optionally by status. |
+| `POST /api/v1/brigades` | Create a brigade of the organization of the user, with its base location. It starts `AVAILABLE`. |
+| `GET /api/v1/brigades?status=` | Brigades of the organization of the user by name, optionally by status. |
 | `GET /api/v1/brigades/{id}` | One brigade with its members and its assignment in progress. |
 | `POST /api/v1/brigades/{id}/members` | Add a member (`LEADER`, `DRIVER`, `MEDIC` or `VOLUNTEER`). |
 | `DELETE /api/v1/brigades/{id}/members/{memberId}` | Remove a member. |
 | `PATCH /api/v1/brigades/{id}/availability` | Put the brigade `AVAILABLE` or `OFF_DUTY`. |
 
-- Brigade names are unique per organization (409).
+- Brigade names are unique per organization (409). A brigade of another
+  organization answers 404.
 - A brigade is assigned to a distribution plan only while it is available and
   has a `LEADER`, and has one assignment in progress at most. The domain
   already enforces these rules; the assignment itself arrives with the
   distribution plans and the brigade suggestion of the AI Service.
 - While a brigade is assigned, its availability cannot change (409) and its last
   leader cannot be removed (422). `ASSIGNED` is never set by hand (422).
+
+### Identity Access
+
+| Method and path | Description |
+|---|---|
+| `POST /api/v1/auth/sign-in` | Sign in with email and password; returns the access token, its expiry, the role and the organization (US-21). |
+| `POST /api/v1/organizations` | Register an organization with its first `ORGANIZATION_ADMIN`. Needs `X-Platform-Key`. |
+| `PATCH /api/v1/organizations/{id}/status` | Suspend or reactivate an organization. Needs `X-Platform-Key`. |
+| `GET /api/v1/organizations/{id}` | The organization of the user. |
+| `POST /api/v1/organizations/{id}/users` | Register a user of the organization with a role (US-22). |
+| `GET /api/v1/organizations/{id}/users` | Users of the organization, by email. |
+| `GET /api/v1/users/me` | The account of the signed-in user. |
+| `PATCH /api/v1/users/{id}/role` | Change the role of a user (US-22). |
+| `PATCH /api/v1/users/{id}/status` | `ACTIVE` to enable or unlock an account, `DISABLED` to disable it. |
+
+- Wrong email, wrong password, a locked account and a suspended organization
+  get the same 401 "Invalid credentials.", so the answer does not reveal what
+  was wrong (US-21). The fifth failed attempt in a row locks the account.
+- Tokens are HS256 JWTs signed with `AUTH_JWT_SECRET` and valid for 8 hours.
+  Each request reads the current account: a role change applies to the next
+  request, and a disabled user or a suspended organization gets 401 at once,
+  even with a token issued before (R-05).
+- An administrator manages only the users of their organization (others
+  answer 404) and never their own account (422). `LOCKED` is never set by hand.
+- AuxIA has no platform administrator role: the platform operator registers
+  organizations with `PLATFORM_ADMIN_KEY`.
+- Other bounded contexts use `IdentityAccessContextFacade` to check the current
+  role of a user before a critical command.
+
+### Roles
+
+| Role | Can change |
+|---|---|
+| `AUTHORITY` | Emergencies, zones, population impact, scores, field reports and their zone |
+| `FIELD_BRIGADE` | Field reports (register and structure) |
+| `ORGANIZATION_ADMIN` | Inventory, brigades and the users of the organization |
+| `AUDITOR` | Nothing: reads only |
+
+A role that cannot run an action gets 403.
 
 ## Urgency score
 
@@ -269,5 +332,7 @@ decides what to send and when (TS-C04).
   more children than people affected), with a localized detail. When an
   external service such as the AI Service does not answer, the API answers 503.
 
-- **Security.** Until the Identity Access phase every endpoint is open. That
-  phase adds JWT authentication and roles.
+- **Security.** A missing, invalid or expired token answers 401, and a role
+  that cannot run the action answers 403, both as localized problem details.
+  In Swagger UI, sign in with `POST /api/v1/auth/sign-in` and paste the token
+  in **Authorize**.

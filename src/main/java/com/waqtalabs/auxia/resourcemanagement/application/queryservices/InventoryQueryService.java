@@ -23,6 +23,7 @@ public class InventoryQueryService {
   public Inventory handle(GetInventoryByIdQuery query) {
     return inventoryRepository
         .findById(query.inventoryId())
+        .filter(inventory -> inventory.belongsTo(query.organizationId()))
         .orElseThrow(() -> new InventoryNotFoundException(query.inventoryId()));
   }
 

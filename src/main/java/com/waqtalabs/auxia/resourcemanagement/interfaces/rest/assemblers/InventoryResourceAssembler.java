@@ -23,15 +23,17 @@ public final class InventoryResourceAssembler {
 
   private InventoryResourceAssembler() {}
 
-  public static CreateInventoryCommand toCommand(CreateInventoryRequest request) {
-    return new CreateInventoryCommand(new OrganizationId(request.organizationId()), request.name());
+  public static CreateInventoryCommand toCommand(
+      OrganizationId organizationId, CreateInventoryRequest request) {
+    return new CreateInventoryCommand(organizationId, request.name());
   }
 
   /** A missing minimum stock is 0, as in the database. */
   public static RegisterResourceCommand toCommand(
-      UUID inventoryId, RegisterResourceRequest request) {
+      UUID inventoryId, OrganizationId organizationId, RegisterResourceRequest request) {
     return new RegisterResourceCommand(
         new InventoryId(inventoryId),
+        organizationId,
         request.name(),
         request.category(),
         request.unit(),
@@ -39,15 +41,22 @@ public final class InventoryResourceAssembler {
   }
 
   public static RestockResourceCommand toCommand(
-      UUID inventoryId, UUID resourceId, RestockRequest request) {
+      UUID inventoryId, OrganizationId organizationId, UUID resourceId, RestockRequest request) {
     return new RestockResourceCommand(
-        new InventoryId(inventoryId), new ResourceId(resourceId), request.quantity());
+        new InventoryId(inventoryId),
+        organizationId,
+        new ResourceId(resourceId),
+        request.quantity());
   }
 
   public static AdjustStockCommand toCommand(
-      UUID inventoryId, UUID resourceId, AdjustStockRequest request) {
+      UUID inventoryId,
+      OrganizationId organizationId,
+      UUID resourceId,
+      AdjustStockRequest request) {
     return new AdjustStockCommand(
         new InventoryId(inventoryId),
+        organizationId,
         new ResourceId(resourceId),
         request.quantityChange(),
         request.reason());

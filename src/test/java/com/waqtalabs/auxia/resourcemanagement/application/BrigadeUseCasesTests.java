@@ -64,12 +64,14 @@ class BrigadeUseCasesTests {
 
     Brigade withMember =
         addMember.handle(
-            new AddStaffMemberCommand(brigade.id(), "Rosa Quispe", StaffRole.LEADER, null));
+            new AddStaffMemberCommand(
+                brigade.id(), organization, "Rosa Quispe", StaffRole.LEADER, null));
     StaffMember leader = withMember.members().getFirst();
     assertThat(withMember.hasLeader()).isTrue();
 
     Brigade withoutMember =
-        removeMember.handle(new RemoveStaffMemberCommand(brigade.id(), leader.id()));
+        removeMember.handle(
+            new RemoveStaffMemberCommand(brigade.id(), organization, leader.id()));
     assertThat(withoutMember.members()).isEmpty();
   }
 
@@ -79,7 +81,7 @@ class BrigadeUseCasesTests {
     Brigade available =
         create.handle(new CreateBrigadeCommand(organization, "Brigada Pedregal", CHOSICA));
     changeAvailability.handle(
-        new ChangeBrigadeAvailabilityCommand(offDuty.id(), BrigadeStatus.OFF_DUTY));
+        new ChangeBrigadeAvailabilityCommand(offDuty.id(), organization, BrigadeStatus.OFF_DUTY));
 
     assertThat(
             queries.handle(
@@ -94,13 +96,32 @@ class BrigadeUseCasesTests {
   void unknownBrigadeIsNotFound() {
     var unknown = BrigadeId.generate();
 
-    assertThatThrownBy(() -> queries.handle(new GetBrigadeByIdQuery(unknown)))
+    assertThatThrownBy(() -> queries.handle(new GetBrigadeByIdQuery(unknown, organization)))
         .isInstanceOf(BrigadeNotFoundException.class);
     assertThatThrownBy(
             () ->
                 addMember.handle(
-                    new AddStaffMemberCommand(unknown, "Rosa Quispe", StaffRole.LEADER, null)))
+                    new AddStaffMemberCommand(
+                        unknown, organization, "Rosa Quispe", StaffRole.LEADER, null)))
         .isInstanceOf(BrigadeNotFoundException.class);
+  }
+
+  @Test
+  void brigadeOfAnotherOrganizationIsNotFound() {
+    Brigade brigade = create();
+    var otherOrganization = new OrganizationId(UUID.randomUUID());
+
+    assertThatThrownBy(
+            () -> queries.handle(new GetBrigadeByIdQuery(brigade.id(), otherOrganization)))
+        .isInstanceOf(BrigadeNotFoundException.class);
+    assertThatThrownBy(
+            () ->
+                changeAvailability.handle(
+                    new ChangeBrigadeAvailabilityCommand(
+                        brigade.id(), otherOrganization, BrigadeStatus.OFF_DUTY)))
+        .isInstanceOf(BrigadeNotFoundException.class);
+    assertThat(brigades.findById(brigade.id()).orElseThrow().status())
+        .isEqualTo(BrigadeStatus.AVAILABLE);
   }
 
   private Brigade create() {

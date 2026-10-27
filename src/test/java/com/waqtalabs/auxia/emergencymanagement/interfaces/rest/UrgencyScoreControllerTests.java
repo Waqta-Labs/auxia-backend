@@ -12,6 +12,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import com.waqtalabs.auxia.DefaultAuthorityUserConfiguration;
 import com.waqtalabs.auxia.FakeAiServiceConfiguration;
 import com.waqtalabs.auxia.TestcontainersConfiguration;
 import com.waqtalabs.auxia.emergencymanagement.application.FakeAiService;
@@ -42,7 +43,11 @@ import org.springframework.test.web.servlet.ResultActions;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import({TestcontainersConfiguration.class, FakeAiServiceConfiguration.class})
+@Import({
+  TestcontainersConfiguration.class,
+  FakeAiServiceConfiguration.class,
+  DefaultAuthorityUserConfiguration.class
+})
 class UrgencyScoreControllerTests {
 
   private static final String REPORT = "Colapso total de viviendas, urge agua potable.";

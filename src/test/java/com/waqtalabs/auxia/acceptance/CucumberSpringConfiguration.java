@@ -1,5 +1,6 @@
 package com.waqtalabs.auxia.acceptance;
 
+import com.waqtalabs.auxia.DefaultAuthorityUserConfiguration;
 import com.waqtalabs.auxia.FakeAiServiceConfiguration;
 import com.waqtalabs.auxia.TestcontainersConfiguration;
 import io.cucumber.spring.CucumberContextConfiguration;
@@ -17,6 +18,7 @@ import org.springframework.context.annotation.Import;
 @Import({
   TestcontainersConfiguration.class,
   FakeAiServiceConfiguration.class,
+  DefaultAuthorityUserConfiguration.class,
   EmergencyScenario.class
 })
 class CucumberSpringConfiguration {}

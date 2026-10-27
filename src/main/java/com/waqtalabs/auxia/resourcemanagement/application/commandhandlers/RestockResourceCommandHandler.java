@@ -23,6 +23,7 @@ public class RestockResourceCommandHandler {
     Inventory inventory =
         inventoryRepository
             .findById(command.inventoryId())
+            .filter(found -> found.belongsTo(command.organizationId()))
             .orElseThrow(() -> new InventoryNotFoundException(command.inventoryId()));
     inventory.restock(command.resourceId(), command.quantity());
     return inventoryRepository.save(inventory).stockItem(command.resourceId());

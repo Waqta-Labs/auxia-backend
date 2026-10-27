@@ -11,6 +11,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.jayway.jsonpath.JsonPath;
+import com.waqtalabs.auxia.DefaultAuthorityUserConfiguration;
 import com.waqtalabs.auxia.TestcontainersConfiguration;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -26,7 +27,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, DefaultAuthorityUserConfiguration.class})
 @Transactional
 class ZoneControllerTests {
 

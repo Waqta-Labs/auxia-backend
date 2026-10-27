@@ -34,6 +34,15 @@ spring:
       ddl-auto: validate
 
 auxia:
+  security:
+    # Secret of the platform operator to register and suspend organizations (X-Platform-Key).
+    platform-admin-key: ${PLATFORM_ADMIN_KEY}
+    jwt:
+      # Base64 secrets of at least 32 bytes by key id. To rotate, add a key and make it active.
+      keys:
+        k1: ${AUTH_JWT_SECRET}
+      active-key-id: k1
+      expiration: 8h
   ai-service:
     # auxia-ai-service structures field reports and calculates urgency scores (TS-C04).
     # Its key must be the same AI_SERVICE_API_KEY that the AI Service expects.

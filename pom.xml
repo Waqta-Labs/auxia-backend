@@ -16,6 +16,7 @@
     <properties>
         <java.version>21</java.version>
         <cucumber.version>8.0.4</cucumber.version>
+        <jjwt.version>0.13.0</jjwt.version>
     </properties>
     <dependencyManagement>
         <dependencies>
@@ -69,6 +70,24 @@
             <version>3.0.5</version>
         </dependency>
 
+        <!-- JWT of Identity Access: API at compile time, implementation and Gson at run time. -->
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-api</artifactId>
+            <version>${jjwt.version}</version>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-impl</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
+        <dependency>
+            <groupId>io.jsonwebtoken</groupId>
+            <artifactId>jjwt-gson</artifactId>
+            <version>${jjwt.version}</version>
+            <scope>runtime</scope>
+        </dependency>
         <dependency>
             <groupId>org.postgresql</groupId>
             <artifactId>postgresql</artifactId>
@@ -152,6 +171,8 @@
                         <!-- Nor the AI Service: tests replace its gateways or stub its responses. -->
                         <AI_SERVICE_URL>http://localhost:1/tests-use-stubs</AI_SERVICE_URL>
                         <AI_SERVICE_API_KEY>test-api-key-0123456789</AI_SERVICE_API_KEY>
+                        <AUTH_JWT_SECRET>YXV4aWEtdGVzdC1qd3Qtc2VjcmV0LTAxMjM0NTY3ODk=</AUTH_JWT_SECRET>
+                        <PLATFORM_ADMIN_KEY>test-platform-key-0123456789</PLATFORM_ADMIN_KEY>
                     </systemPropertyVariables>
                 </configuration>
             </plugin>

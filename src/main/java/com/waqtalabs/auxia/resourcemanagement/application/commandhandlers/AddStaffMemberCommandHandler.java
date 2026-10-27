@@ -22,6 +22,7 @@ public class AddStaffMemberCommandHandler {
     Brigade brigade =
         brigadeRepository
             .findById(command.brigadeId())
+            .filter(found -> found.belongsTo(command.organizationId()))
             .orElseThrow(() -> new BrigadeNotFoundException(command.brigadeId()));
     brigade.addMember(StaffMember.register(command.fullName(), command.role(), command.phone()));
     return brigadeRepository.save(brigade);

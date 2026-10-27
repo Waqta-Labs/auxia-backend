@@ -30,6 +30,7 @@ public class AdjustStockCommandHandler {
     Inventory inventory =
         inventoryRepository
             .findById(command.inventoryId())
+            .filter(found -> found.belongsTo(command.organizationId()))
             .orElseThrow(() -> new InventoryNotFoundException(command.inventoryId()));
     inventory.adjustStock(command.resourceId(), command.quantityChange(), command.reason());
     StockItem item = inventoryRepository.save(inventory).stockItem(command.resourceId());
