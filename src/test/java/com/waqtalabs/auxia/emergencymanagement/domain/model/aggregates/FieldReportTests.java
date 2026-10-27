@@ -88,7 +88,8 @@ class FieldReportTests {
             zone.id(),
             stored.rawText(),
             stored.source(),
-            stored.reportedAt());
+            stored.reportedAt(),
+            null);
 
     assertThat(report.id()).isEqualTo(stored.id());
     assertThat(report.zoneId()).contains(zone.id());
