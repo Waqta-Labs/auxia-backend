@@ -4,6 +4,7 @@ import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.Calcu
 import com.waqtalabs.auxia.emergencymanagement.application.commands.CalculateUrgencyScoreCommand;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportAssignedToZone;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportProcessed;
+import com.waqtalabs.auxia.emergencymanagement.domain.events.ZonePopulationImpactUpdated;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.ZoneRegistered;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.InsufficientScoringDataException;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
@@ -18,8 +19,8 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * Keeps the urgency score of each zone up to date, so the ranking changes without the authority
- * asking for it: when the zone is registered, when one of its reports is structured and when a
- * report is assigned to it.
+ * asking for it: when the zone is registered or its population impact changes, when one of its
+ * reports is structured and when a report is assigned to it.
  *
  * <p>Like the structuring, it runs after the commit in a transaction of its own. A zone without
  * population keeps its score not available, and a failure of the AI Service keeps the previous
@@ -44,6 +45,11 @@ public class UrgencyScoreRecalculationEventHandler {
 
   @TransactionalEventListener(fallbackExecution = true)
   public void on(ZoneRegistered event) {
+    recalculate(event.zoneId());
+  }
+
+  @TransactionalEventListener(fallbackExecution = true)
+  public void on(ZonePopulationImpactUpdated event) {
     recalculate(event.zoneId());
   }
 

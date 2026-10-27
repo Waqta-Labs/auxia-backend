@@ -25,7 +25,7 @@ public final class Zone {
   private final EmergencyId emergencyId;
   private final String name;
   private final Geolocation geolocation;
-  private final PopulationImpact populationImpact;
+  private PopulationImpact populationImpact;
   private final DamageLevel damageLevel;
   private ZoneStatus status;
   private UrgencyScore urgencyScore;
@@ -125,12 +125,21 @@ public final class Zone {
     return new UrgencyIndicators(
         mostSevereDamage,
         population,
-        largest(populationImpact.familiesAffected(), reports, StructuredFieldData::familiesAffected),
+        largest(
+            populationImpact.familiesAffected(), reports, StructuredFieldData::familiesAffected),
         largest(populationImpact.peopleAffected(), reports, StructuredFieldData::peopleAffected),
         largest(populationImpact.children(), reports, StructuredFieldData::children),
         largest(populationImpact.elderlyPeople(), reports, StructuredFieldData::elderlyPeople),
         largest(populationImpact.disabledPeople(), reports, StructuredFieldData::disabledPeople),
         needs);
+  }
+
+  /**
+   * Replaces the population impact, for example to add the population once it is known. The
+   * current score stays until it is recalculated.
+   */
+  public void updatePopulationImpact(PopulationImpact populationImpact) {
+    this.populationImpact = Objects.requireNonNull(populationImpact, "populationImpact");
   }
 
   /** Applies a new urgency score and moves the zone to {@code PRIORITIZED}. */

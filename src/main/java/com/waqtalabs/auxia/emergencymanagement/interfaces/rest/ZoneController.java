@@ -2,6 +2,7 @@ package com.waqtalabs.auxia.emergencymanagement.interfaces.rest;
 
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.CalculateUrgencyScoreCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterZoneCommandHandler;
+import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.UpdateZonePopulationImpactCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.CalculateUrgencyScoreCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneByIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneRankingQuery;
@@ -11,6 +12,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Emergen
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.assemblers.ZoneResourceAssembler;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.PopulationImpactResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterZoneRequest;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneRankingItemResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneResource;
@@ -27,6 +29,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -40,14 +43,17 @@ import org.springframework.web.bind.annotation.RestController;
 public class ZoneController {
 
   private final RegisterZoneCommandHandler registerZone;
+  private final UpdateZonePopulationImpactCommandHandler updatePopulationImpact;
   private final CalculateUrgencyScoreCommandHandler calculateUrgencyScore;
   private final ZoneQueryService zoneQueries;
 
   public ZoneController(
       RegisterZoneCommandHandler registerZone,
+      UpdateZonePopulationImpactCommandHandler updatePopulationImpact,
       CalculateUrgencyScoreCommandHandler calculateUrgencyScore,
       ZoneQueryService zoneQueries) {
     this.registerZone = registerZone;
+    this.updatePopulationImpact = updatePopulationImpact;
     this.calculateUrgencyScore = calculateUrgencyScore;
     this.zoneQueries = zoneQueries;
   }
@@ -106,6 +112,24 @@ public class ZoneController {
   public ZoneResource findById(@PathVariable UUID zoneId) {
     return ZoneResourceAssembler.toResource(
         zoneQueries.handle(new GetZoneByIdQuery(new ZoneId(zoneId))));
+  }
+
+  @PatchMapping("/zones/{zoneId}/population-impact")
+  @Operation(
+      summary = "Update the population impact of a zone",
+      description =
+          "Only the counts sent change; the others keep their value. Use it to add the"
+              + " population of a zone registered without it. The urgency score is recalculated"
+              + " and the response already includes it, unless the AI Service did not answer.")
+  @ApiResponse(responseCode = "200", description = "Population impact updated")
+  @ApiResponse(responseCode = "400", description = "Invalid request, for example a negative count")
+  @ApiResponse(responseCode = "404", description = "The zone does not exist")
+  @ApiResponse(responseCode = "422", description = "Inconsistent population impact")
+  public ZoneResource updatePopulationImpact(
+      @PathVariable UUID zoneId, @Valid @RequestBody PopulationImpactResource request) {
+    Zone zone =
+        updatePopulationImpact.handle(ZoneResourceAssembler.toCommand(new ZoneId(zoneId), request));
+    return ZoneResourceAssembler.toResource(zoneQueries.handle(new GetZoneByIdQuery(zone.id())));
   }
 
   @GetMapping("/zones/{zoneId}/score")

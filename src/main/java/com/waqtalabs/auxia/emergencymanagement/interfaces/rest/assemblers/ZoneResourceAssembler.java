@@ -1,12 +1,14 @@
 package com.waqtalabs.auxia.emergencymanagement.interfaces.rest.assemblers;
 
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterZoneCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.commands.UpdateZonePopulationImpactCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneRankingEntry;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.GeolocationResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.PopulationImpactResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterZoneRequest;
@@ -40,6 +42,19 @@ public final class ZoneResourceAssembler {
             orZero(impact.elderlyPeople()),
             orZero(impact.disabledPeople())),
         request.damageLevel());
+  }
+
+  /** Missing counts keep their current value. */
+  public static UpdateZonePopulationImpactCommand toCommand(
+      ZoneId zoneId, PopulationImpactResource request) {
+    return new UpdateZonePopulationImpactCommand(
+        zoneId,
+        request.population(),
+        request.familiesAffected(),
+        request.peopleAffected(),
+        request.children(),
+        request.elderlyPeople(),
+        request.disabledPeople());
   }
 
   public static ZoneResource toResource(Zone zone) {
