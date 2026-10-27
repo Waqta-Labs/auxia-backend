@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.waqtalabs.auxia.shared.application.exceptions.ExternalServiceUnavailableException;
 import com.waqtalabs.auxia.shared.domain.exceptions.ConflictException;
 import com.waqtalabs.auxia.shared.domain.exceptions.NotFoundException;
 import com.waqtalabs.auxia.shared.domain.exceptions.RuleViolationException;
@@ -149,6 +150,19 @@ class GlobalExceptionHandlerTests {
         .andExpect(jsonPath("$.title").value("Conflicto"));
   }
 
+  @Test
+  void unavailableExternalServiceReturnsServiceUnavailableWithItsName() throws Exception {
+    mockMvc
+        .perform(get(SAMPLES + "/external-failure"))
+        .andExpect(status().isServiceUnavailable())
+        .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.title").value("Service unavailable"))
+        .andExpect(
+            jsonPath("$.detail")
+                .value("The AI Service is not available right now. Please try again later."))
+        .andExpect(content().string(not(containsString("secret"))));
+  }
+
   /** Controller used only by these tests to trigger each kind of error. */
   @RestController
   @RequestMapping(SAMPLES)
@@ -164,6 +178,12 @@ class GlobalExceptionHandlerTests {
     @GetMapping("/failure")
     SampleResource fail() {
       throw new IllegalStateException("secret connection detail");
+    }
+
+    @GetMapping("/external-failure")
+    SampleResource failInExternalService() {
+      throw new ExternalServiceUnavailableException(
+          "AI Service", new IllegalStateException("secret connection detail"));
     }
 
     @GetMapping("/domain/{category}")
