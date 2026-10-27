@@ -1,5 +1,9 @@
 package com.waqtalabs.auxia.shared.interfaces.rest;
 
+import com.waqtalabs.auxia.shared.domain.exceptions.ConflictException;
+import com.waqtalabs.auxia.shared.domain.exceptions.DomainException;
+import com.waqtalabs.auxia.shared.domain.exceptions.NotFoundException;
+import com.waqtalabs.auxia.shared.domain.exceptions.RuleViolationException;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.context.i18n.LocaleContextHolder;
@@ -41,6 +45,34 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
     ProblemDetail body = ex.updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
     body.setProperty("errors", ex.getFieldErrors().stream().map(InvalidField::from).toList());
     return handleExceptionInternal(ex, body, headers, status, request);
+  }
+
+  /**
+   * An error of the domain: 404, 409 or 422 depending on its category. The title belongs to the
+   * category and the detail to the concrete exception, filled with its arguments.
+   */
+  @ExceptionHandler(DomainException.class)
+  public ResponseEntity<Object> handleDomainException(DomainException ex, WebRequest request) {
+    Class<? extends DomainException> category =
+        switch (ex) {
+          case NotFoundException ignored -> NotFoundException.class;
+          case ConflictException ignored -> ConflictException.class;
+          case RuleViolationException ignored -> RuleViolationException.class;
+        };
+    HttpStatus status =
+        switch (ex) {
+          case NotFoundException ignored -> HttpStatus.NOT_FOUND;
+          case ConflictException ignored -> HttpStatus.CONFLICT;
+          case RuleViolationException ignored -> HttpStatus.UNPROCESSABLE_CONTENT;
+        };
+    ProblemDetail body =
+        ErrorResponse.builder(ex, status, ex.getMessage())
+            .titleMessageCode(ErrorResponse.getDefaultTitleMessageCode(category))
+            .detailMessageCode(ErrorResponse.getDefaultDetailMessageCode(ex.getClass(), null))
+            .detailMessageArguments(ex.arguments())
+            .build()
+            .updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
+    return handleExceptionInternal(ex, body, new HttpHeaders(), status, request);
   }
 
   /** Any exception without a specific handler: a 500 that does not expose internal details. */

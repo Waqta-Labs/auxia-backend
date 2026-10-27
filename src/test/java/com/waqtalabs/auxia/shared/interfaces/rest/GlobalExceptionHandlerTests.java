@@ -10,6 +10,9 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.waqtalabs.auxia.shared.domain.exceptions.ConflictException;
+import com.waqtalabs.auxia.shared.domain.exceptions.NotFoundException;
+import com.waqtalabs.auxia.shared.domain.exceptions.RuleViolationException;
 import com.waqtalabs.auxia.shared.infrastructure.i18n.LocalizationConfiguration;
 import com.waqtalabs.auxia.shared.infrastructure.security.WebSecurityConfiguration;
 import jakarta.validation.Valid;
@@ -22,12 +25,14 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
-@WebMvcTest
+// Only the sample controller: the controllers of the bounded contexts need their use cases.
+@WebMvcTest(GlobalExceptionHandlerTests.SampleController.class)
 @Import({
   GlobalExceptionHandlerTests.SampleController.class,
   LocalizationConfiguration.class,
@@ -110,6 +115,40 @@ class GlobalExceptionHandlerTests {
         .andExpect(jsonPath("$.title").value("Not found"));
   }
 
+  @Test
+  void domainNotFoundReturnsNotFoundWithTheMessageOfTheException() throws Exception {
+    mockMvc
+        .perform(get(SAMPLES + "/domain/not-found"))
+        .andExpect(status().isNotFound())
+        .andExpect(content().contentType(MediaType.APPLICATION_PROBLEM_JSON))
+        .andExpect(jsonPath("$.title").value("Not found"))
+        .andExpect(jsonPath("$.detail").value("Sample 42 does not exist"));
+  }
+
+  @Test
+  void domainConflictReturnsConflict() throws Exception {
+    mockMvc
+        .perform(get(SAMPLES + "/domain/conflict"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.title").value("Conflict"));
+  }
+
+  @Test
+  void domainRuleViolationReturnsUnprocessableContent() throws Exception {
+    mockMvc
+        .perform(get(SAMPLES + "/domain/rule-violation"))
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(jsonPath("$.title").value("Business rule violated"));
+  }
+
+  @Test
+  void domainErrorTitleIsLocalized() throws Exception {
+    mockMvc
+        .perform(get(SAMPLES + "/domain/conflict").header(HttpHeaders.ACCEPT_LANGUAGE, "es-PE"))
+        .andExpect(status().isConflict())
+        .andExpect(jsonPath("$.title").value("Conflicto"));
+  }
+
   /** Controller used only by these tests to trigger each kind of error. */
   @RestController
   @RequestMapping(SAMPLES)
@@ -125,6 +164,36 @@ class GlobalExceptionHandlerTests {
     @GetMapping("/failure")
     SampleResource fail() {
       throw new IllegalStateException("secret connection detail");
+    }
+
+    @GetMapping("/domain/{category}")
+    SampleResource failInDomain(@PathVariable String category) {
+      throw switch (category) {
+        case "not-found" -> new SampleNotFoundException();
+        case "conflict" -> new SampleConflictException();
+        default -> new SampleRuleViolationException();
+      };
+    }
+  }
+
+  static class SampleNotFoundException extends NotFoundException {
+
+    SampleNotFoundException() {
+      super("Sample 42 does not exist", 42);
+    }
+  }
+
+  static class SampleConflictException extends ConflictException {
+
+    SampleConflictException() {
+      super("Sample is closed");
+    }
+  }
+
+  static class SampleRuleViolationException extends RuleViolationException {
+
+    SampleRuleViolationException() {
+      super("Sample breaks a rule");
     }
   }
 }
