@@ -6,7 +6,9 @@ import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.Updat
 import com.waqtalabs.auxia.emergencymanagement.application.commands.CalculateUrgencyScoreCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneByIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneRankingQuery;
+import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneReportQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneQueryService;
+import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneReportQueryService;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
@@ -27,6 +29,10 @@ import jakarta.validation.constraints.DecimalMin;
 import java.net.URI;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
@@ -46,16 +52,19 @@ public class ZoneController {
   private final UpdateZonePopulationImpactCommandHandler updatePopulationImpact;
   private final CalculateUrgencyScoreCommandHandler calculateUrgencyScore;
   private final ZoneQueryService zoneQueries;
+  private final ZoneReportQueryService zoneReports;
 
   public ZoneController(
       RegisterZoneCommandHandler registerZone,
       UpdateZonePopulationImpactCommandHandler updatePopulationImpact,
       CalculateUrgencyScoreCommandHandler calculateUrgencyScore,
-      ZoneQueryService zoneQueries) {
+      ZoneQueryService zoneQueries,
+      ZoneReportQueryService zoneReports) {
     this.registerZone = registerZone;
     this.updatePopulationImpact = updatePopulationImpact;
     this.calculateUrgencyScore = calculateUrgencyScore;
     this.zoneQueries = zoneQueries;
+    this.zoneReports = zoneReports;
   }
 
   @PostMapping("/emergencies/{emergencyId}/zones")
@@ -143,6 +152,27 @@ public class ZoneController {
   public ZoneScoreResource findScore(@PathVariable UUID zoneId) {
     return ZoneResourceAssembler.toScoreResource(
         zoneQueries.handle(new GetZoneByIdQuery(new ZoneId(zoneId))));
+  }
+
+  @GetMapping("/zones/{zoneId}/report")
+  @Operation(
+      summary = "Export the report of a zone as PDF",
+      description =
+          "Includes the impact of the zone, its urgency score with the points each variable"
+              + " added and the model version, and its field reports (US-05). The document is in"
+              + " the language of Accept-Language.")
+  @ApiResponse(responseCode = "200", description = "PDF of the zone report")
+  @ApiResponse(responseCode = "404", description = "The zone does not exist")
+  public ResponseEntity<byte[]> exportReport(@PathVariable UUID zoneId) {
+    byte[] pdf =
+        zoneReports.handle(
+            new GetZoneReportQuery(new ZoneId(zoneId), LocaleContextHolder.getLocale()));
+    var disposition =
+        ContentDisposition.attachment().filename("zone-report-" + zoneId + ".pdf").build();
+    return ResponseEntity.ok()
+        .contentType(MediaType.APPLICATION_PDF)
+        .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+        .body(pdf);
   }
 
   @PostMapping("/zones/{zoneId}/score")
