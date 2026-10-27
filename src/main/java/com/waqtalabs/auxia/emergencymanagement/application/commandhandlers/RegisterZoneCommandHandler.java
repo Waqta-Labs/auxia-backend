@@ -1,25 +1,34 @@
 package com.waqtalabs.auxia.emergencymanagement.application.commandhandlers;
 
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterZoneCommand;
+import com.waqtalabs.auxia.emergencymanagement.domain.events.ZoneRegistered;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyNotFoundException;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Emergency;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.EmergencyRepository;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.ZoneRepository;
+import com.waqtalabs.auxia.shared.application.events.DomainEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Loads the emergency first, so a closed emergency rejects the new zone. */
+/**
+ * Loads the emergency first, so a closed emergency rejects the new zone. It publishes
+ * ZoneRegistered, which calculates the first urgency score of the zone.
+ */
 @Service
 public class RegisterZoneCommandHandler {
 
   private final EmergencyRepository emergencyRepository;
   private final ZoneRepository zoneRepository;
+  private final DomainEventPublisher eventPublisher;
 
   public RegisterZoneCommandHandler(
-      EmergencyRepository emergencyRepository, ZoneRepository zoneRepository) {
+      EmergencyRepository emergencyRepository,
+      ZoneRepository zoneRepository,
+      DomainEventPublisher eventPublisher) {
     this.emergencyRepository = emergencyRepository;
     this.zoneRepository = zoneRepository;
+    this.eventPublisher = eventPublisher;
   }
 
   @Transactional
@@ -34,6 +43,8 @@ public class RegisterZoneCommandHandler {
             command.geolocation(),
             command.populationImpact(),
             command.damageLevel());
-    return zoneRepository.save(zone);
+    Zone saved = zoneRepository.save(zone);
+    eventPublisher.publish(new ZoneRegistered(saved.id()));
+    return saved;
   }
 }

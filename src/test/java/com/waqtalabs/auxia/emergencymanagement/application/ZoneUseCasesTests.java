@@ -20,15 +20,19 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Emergen
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneStatus;
+import com.waqtalabs.auxia.shared.domain.events.DomainEvent;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class ZoneUseCasesTests {
 
   private final InMemoryEmergencyRepository emergencies = new InMemoryEmergencyRepository();
   private final InMemoryZoneRepository zones = new InMemoryZoneRepository();
+  private final List<DomainEvent> events = new ArrayList<>();
   private final RegisterZoneCommandHandler register =
-      new RegisterZoneCommandHandler(emergencies, zones);
+      new RegisterZoneCommandHandler(emergencies, zones, events::add);
   private final ZoneQueryService queries = new ZoneQueryService(emergencies, zones);
 
   private final Emergency emergency =
