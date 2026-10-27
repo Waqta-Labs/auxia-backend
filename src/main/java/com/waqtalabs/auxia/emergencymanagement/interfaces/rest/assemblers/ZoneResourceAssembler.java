@@ -1,14 +1,21 @@
 package com.waqtalabs.auxia.emergencymanagement.interfaces.rest.assemblers;
 
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterZoneCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneRankingEntry;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.GeolocationResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.PopulationImpactResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterZoneRequest;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ScoreContributionResource;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneRankingItemResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneResource;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneScoreResource;
+import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 
 public final class ZoneResourceAssembler {
@@ -37,6 +44,7 @@ public final class ZoneResourceAssembler {
 
   public static ZoneResource toResource(Zone zone) {
     PopulationImpact impact = zone.populationImpact();
+    Optional<UrgencyScore> score = zone.urgencyScore();
     return new ZoneResource(
         zone.id().value(),
         zone.emergencyId().value(),
@@ -52,7 +60,55 @@ public final class ZoneResourceAssembler {
             impact.elderlyPeople(),
             impact.disabledPeople()),
         zone.damageLevel(),
-        zone.status());
+        zone.status(),
+        score.map(UrgencyScore::value).orElse(null),
+        score.map(UrgencyScore::level).orElse(null));
+  }
+
+  public static ZoneRankingItemResource toRankingItem(ZoneRankingEntry entry) {
+    Zone zone = entry.zone();
+    Optional<UrgencyScore> score = zone.urgencyScore();
+    return new ZoneRankingItemResource(
+        zone.id().value(),
+        zone.name(),
+        zone.status(),
+        zone.damageLevel(),
+        zone.populationImpact().peopleAffected(),
+        score.map(UrgencyScore::value).orElse(null),
+        score.map(UrgencyScore::level).orElse(null),
+        entry.needs());
+  }
+
+  /**
+   * The score with its explanation. Without a score, it lists what the zone lacks: its population,
+   * or nothing when the score is just pending because the AI Service did not answer.
+   */
+  public static ZoneScoreResource toScoreResource(Zone zone) {
+    return zone.urgencyScore()
+        .map(
+            score ->
+                new ZoneScoreResource(
+                    zone.id().value(),
+                    true,
+                    score.value(),
+                    score.level(),
+                    score.topFeatures().stream()
+                        .map(f -> new ScoreContributionResource(f.feature(), f.contribution()))
+                        .toList(),
+                    score.modelVersion(),
+                    score.calculatedAt(),
+                    List.of()))
+        .orElseGet(
+            () ->
+                new ZoneScoreResource(
+                    zone.id().value(),
+                    false,
+                    null,
+                    null,
+                    List.of(),
+                    null,
+                    null,
+                    zone.hasSufficientDataForScoring() ? List.of() : List.of("population")));
   }
 
   private static int orZero(Integer count) {

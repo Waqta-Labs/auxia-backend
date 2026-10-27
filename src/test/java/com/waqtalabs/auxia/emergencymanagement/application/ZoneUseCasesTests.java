@@ -6,8 +6,9 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterZoneCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterZoneCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneByIdQuery;
-import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZonesByEmergencyIdQuery;
+import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneRankingQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneQueryService;
+import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneRankingEntry;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyClosedException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyNotFoundException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.ZoneNotFoundException;
@@ -33,7 +34,8 @@ class ZoneUseCasesTests {
   private final List<DomainEvent> events = new ArrayList<>();
   private final RegisterZoneCommandHandler register =
       new RegisterZoneCommandHandler(emergencies, zones, events::add);
-  private final ZoneQueryService queries = new ZoneQueryService(emergencies, zones);
+  private final InMemoryFieldReportRepository reports = new InMemoryFieldReportRepository();
+  private final ZoneQueryService queries = new ZoneQueryService(emergencies, zones, reports);
 
   private final Emergency emergency =
       emergencies.save(
@@ -74,7 +76,8 @@ class ZoneUseCasesTests {
     Zone second = register.handle(command(emergency.id(), "Quebrada Pedregal"));
 
     assertThat(queries.handle(new GetZoneByIdQuery(first.id()))).isEqualTo(first);
-    assertThat(queries.handle(new GetZonesByEmergencyIdQuery(emergency.id())))
+    assertThat(queries.handle(GetZoneRankingQuery.all(emergency.id())))
+        .extracting(ZoneRankingEntry::zone)
         .containsExactly(first, second);
   }
 
@@ -83,7 +86,7 @@ class ZoneUseCasesTests {
     assertThatThrownBy(() -> queries.handle(new GetZoneByIdQuery(ZoneId.generate())))
         .isInstanceOf(ZoneNotFoundException.class);
     assertThatThrownBy(
-            () -> queries.handle(new GetZonesByEmergencyIdQuery(EmergencyId.generate())))
+            () -> queries.handle(GetZoneRankingQuery.all(EmergencyId.generate())))
         .isInstanceOf(EmergencyNotFoundException.class);
   }
 

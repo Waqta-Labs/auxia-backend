@@ -1,8 +1,10 @@
 package com.waqtalabs.auxia.emergencymanagement.application.queryservices;
 
+import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportByIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportsByEmergencyIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportsByZoneIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyNotFoundException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportNotFoundException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.ZoneNotFoundException;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.EmergencyRepository;
@@ -28,6 +30,12 @@ public class FieldReportQueryService {
     this.emergencyRepository = emergencyRepository;
     this.zoneRepository = zoneRepository;
     this.fieldReportRepository = fieldReportRepository;
+  }
+
+  public FieldReport handle(GetFieldReportByIdQuery query) {
+    return fieldReportRepository
+        .findById(query.fieldReportId())
+        .orElseThrow(() -> new FieldReportNotFoundException(query.fieldReportId()));
   }
 
   public List<FieldReport> handle(GetFieldReportsByZoneIdQuery query) {
