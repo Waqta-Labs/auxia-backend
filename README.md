@@ -36,6 +36,11 @@ src/main/java/com/waqtalabs/auxia/
 │   ├── application/                 # commands, queries, command handlers, query services
 │   ├── interfaces/rest/             # controllers, resources and assemblers
 │   └── infrastructure/persistence/jpa/
+├── resourcemanagement/
+│   ├── domain/                      # Brigade with its StaffMember and BrigadeAssignment
+│   ├── application/                 # brigade commands, handlers and BrigadeQueryService
+│   ├── interfaces/rest/             # BrigadeController
+│   └── infrastructure/persistence/jpa/
 └── shared/
     ├── domain/exceptions/           # NotFound (404), Conflict (409), RuleViolation (422)
     ├── infrastructure/
@@ -141,6 +146,25 @@ without `zoneId`, its zone is identified from the text: when exactly one zone
 name of the emergency appears in it (ignoring case and accents), the report is
 associated to that zone; otherwise it stays pending zone assignment until the
 authority assigns it (US-01, scenario 2).
+
+### Brigades (Resource Management)
+
+| Method and path | Description |
+|---|---|
+| `POST /api/v1/brigades` | Create a brigade with its base location. It starts `AVAILABLE`. |
+| `GET /api/v1/brigades?organizationId=&status=` | Brigades of an organization by name, optionally by status. |
+| `GET /api/v1/brigades/{id}` | One brigade with its members and its assignment in progress. |
+| `POST /api/v1/brigades/{id}/members` | Add a member (`LEADER`, `DRIVER`, `MEDIC` or `VOLUNTEER`). |
+| `DELETE /api/v1/brigades/{id}/members/{memberId}` | Remove a member. |
+| `PATCH /api/v1/brigades/{id}/availability` | Put the brigade `AVAILABLE` or `OFF_DUTY`. |
+
+- Brigade names are unique per organization (409).
+- A brigade is assigned to a distribution plan only while it is available and
+  has a `LEADER`, and has one assignment in progress at most. The domain
+  already enforces these rules; the assignment itself arrives with the
+  distribution plans and the brigade suggestion of the AI Service.
+- While a brigade is assigned, its availability cannot change (409) and its last
+  leader cannot be removed (422). `ASSIGNED` is never set by hand (422).
 
 ## API conventions
 
