@@ -26,6 +26,8 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Urgency
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneAllocation;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.shared.application.exceptions.ExternalServiceUnavailableException;
+import com.waqtalabs.auxia.shared.infrastructure.aiservice.AiServiceConfiguration;
+import com.waqtalabs.auxia.shared.infrastructure.aiservice.AiServiceProperties;
 import java.net.URI;
 import java.time.Clock;
 import java.time.Duration;

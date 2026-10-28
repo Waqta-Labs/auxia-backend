@@ -1,4 +1,4 @@
-package com.waqtalabs.auxia.emergencymanagement.infrastructure.integration.aiservice;
+package com.waqtalabs.auxia.shared.infrastructure.aiservice;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;

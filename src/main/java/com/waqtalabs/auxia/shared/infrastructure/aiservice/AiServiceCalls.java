@@ -1,4 +1,4 @@
-package com.waqtalabs.auxia.emergencymanagement.infrastructure.integration.aiservice;
+package com.waqtalabs.auxia.shared.infrastructure.aiservice;
 
 import com.waqtalabs.auxia.shared.application.exceptions.ExternalServiceUnavailableException;
 import java.util.function.Supplier;
@@ -7,9 +7,9 @@ import org.slf4j.LoggerFactory;
 import org.springframework.web.client.RestClientException;
 
 /** Turns any failure of a call to the AI Service into ExternalServiceUnavailableException. */
-final class AiServiceCalls {
+public final class AiServiceCalls {
 
-  static final String SERVICE_NAME = "AI Service";
+  public static final String SERVICE_NAME = "AI Service";
 
   private static final Logger LOGGER = LoggerFactory.getLogger(AiServiceCalls.class);
 
@@ -19,7 +19,7 @@ final class AiServiceCalls {
    * Runs a call and returns its response body. A connection error, a timeout, an error status, a
    * body that does not match the contract or an empty body make the service unavailable.
    */
-  static <T> T call(String endpoint, Supplier<T> request) {
+  public static <T> T call(String endpoint, Supplier<T> request) {
     T body;
     try {
       body = request.get();

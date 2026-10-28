@@ -10,6 +10,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Resourc
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneAllocation;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.domain.services.DistributionOptimizationService;
+import com.waqtalabs.auxia.shared.infrastructure.aiservice.AiServiceCalls;
 import java.util.List;
 import java.util.Map;
 import java.util.UUID;
