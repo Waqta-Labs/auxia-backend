@@ -199,6 +199,53 @@ class InventoryTests {
   }
 
   @Test
+  void changedReservationHoldsItsNewLinesAndCanUseWhatItAlreadyHeld() {
+    inventory.restock(water, 100);
+    inventory.restock(food, 40);
+    inventory.reserve(PLAN, List.of(new ReservationLine(water, 60)), NOW);
+
+    inventory.changeReservation(
+        PLAN, List.of(new ReservationLine(water, 100), new ReservationLine(food, 15)));
+
+    assertThat(inventory.stockItem(water).stockLevel()).isEqualTo(new StockLevel(100, 100));
+    assertThat(inventory.availableQuantityOf(food)).isEqualTo(25);
+    assertThat(inventory.activeReservationOf(PLAN).orElseThrow().lines())
+        .containsExactly(new ReservationLine(water, 100), new ReservationLine(food, 15));
+    assertThat(inventory.reservations()).hasSize(1);
+  }
+
+  @Test
+  void changedReservationBeyondTheStockChangesNothing() {
+    inventory.restock(water, 100);
+    inventory.restock(food, 10);
+    inventory.reserve(PLAN, List.of(new ReservationLine(water, 60)), NOW);
+
+    assertThatThrownBy(
+            () ->
+                inventory.changeReservation(
+                    PLAN, List.of(new ReservationLine(water, 30), new ReservationLine(food, 11))))
+        .isInstanceOf(InsufficientStockException.class);
+    assertThat(inventory.availableQuantityOf(water)).isEqualTo(40);
+    assertThat(inventory.availableQuantityOf(food)).isEqualTo(10);
+    assertThat(inventory.activeReservationOf(PLAN).orElseThrow().lines())
+        .containsExactly(new ReservationLine(water, 60));
+  }
+
+  @Test
+  void onlyAnActiveReservationCanChange() {
+    inventory.restock(water, 100);
+    var lines = List.of(new ReservationLine(water, 10));
+    assertThatThrownBy(() -> inventory.changeReservation(PLAN, lines))
+        .isInstanceOf(ReservationNotFoundException.class);
+
+    inventory.reserve(PLAN, lines, NOW);
+    inventory.releaseReservation(PLAN, NOW);
+
+    assertThatThrownBy(() -> inventory.changeReservation(PLAN, lines))
+        .isInstanceOf(ReservationNotFoundException.class);
+  }
+
+  @Test
   void releasingWithoutAnActiveReservationIsRejected() {
     assertThatThrownBy(() -> inventory.releaseReservation(PLAN, NOW))
         .isInstanceOf(ReservationNotFoundException.class);

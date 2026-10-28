@@ -17,7 +17,7 @@ public final class Reservation {
 
   private final ReservationId id;
   private final DistributionPlanId distributionPlanId;
-  private final List<ReservationLine> lines;
+  private List<ReservationLine> lines;
   private final LocalDateTime reservedAt;
   private ReservationStatus status;
   private LocalDateTime closedAt;
@@ -31,10 +31,7 @@ public final class Reservation {
       LocalDateTime closedAt) {
     this.id = Objects.requireNonNull(id, "id");
     this.distributionPlanId = Objects.requireNonNull(distributionPlanId, "distributionPlanId");
-    this.lines = List.copyOf(lines);
-    if (this.lines.isEmpty()) {
-      throw new IllegalArgumentException("a reservation has at least one line");
-    }
+    this.lines = requireLines(lines);
     this.status = Objects.requireNonNull(status, "status");
     this.reservedAt = Objects.requireNonNull(reservedAt, "reservedAt");
     this.closedAt = closedAt;
@@ -59,6 +56,10 @@ public final class Reservation {
       LocalDateTime reservedAt,
       LocalDateTime closedAt) {
     return new Reservation(id, distributionPlanId, lines, status, reservedAt, closedAt);
+  }
+
+  void replaceLines(List<ReservationLine> lines) {
+    this.lines = requireLines(lines);
   }
 
   void release(LocalDateTime at) {
@@ -97,5 +98,13 @@ public final class Reservation {
   /** Empty while the reservation is active. */
   public Optional<LocalDateTime> closedAt() {
     return Optional.ofNullable(closedAt);
+  }
+
+  private static List<ReservationLine> requireLines(List<ReservationLine> lines) {
+    List<ReservationLine> copy = List.copyOf(lines);
+    if (copy.isEmpty()) {
+      throw new IllegalArgumentException("a reservation has at least one line");
+    }
+    return copy;
   }
 }

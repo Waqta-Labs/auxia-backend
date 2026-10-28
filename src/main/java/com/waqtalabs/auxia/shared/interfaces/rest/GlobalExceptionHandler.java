@@ -1,5 +1,6 @@
 package com.waqtalabs.auxia.shared.interfaces.rest;
 
+import com.waqtalabs.auxia.shared.application.exceptions.ActionNotAllowedException;
 import com.waqtalabs.auxia.shared.application.exceptions.AuthenticationFailedException;
 import com.waqtalabs.auxia.shared.application.exceptions.ExternalServiceUnavailableException;
 import com.waqtalabs.auxia.shared.domain.exceptions.ConflictException;
@@ -105,6 +106,14 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
   /** The user is signed in but their role cannot run the action (US-22): 403. */
   @ExceptionHandler(AccessDeniedException.class)
   public ResponseEntity<Object> handleAccessDenied(AccessDeniedException ex, WebRequest request) {
+    return securityProblem(ex, HttpStatus.FORBIDDEN, "accessDenied", request);
+  }
+
+  /** A use case found that the user cannot run it now: 403, like a missing role. */
+  @ExceptionHandler(ActionNotAllowedException.class)
+  public ResponseEntity<Object> handleActionNotAllowed(
+      ActionNotAllowedException ex, WebRequest request) {
+    LOGGER.info("Action not allowed: {}", ex.getMessage());
     return securityProblem(ex, HttpStatus.FORBIDDEN, "accessDenied", request);
   }
 

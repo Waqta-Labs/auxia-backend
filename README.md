@@ -28,17 +28,21 @@ src/main/java/com/waqtalabs/auxia/
 ├── AuxiaApplication.java
 ├── emergencymanagement/
 │   ├── domain/
-│   │   ├── model/aggregates/        # Emergency, Zone, FieldReport
+│   │   ├── model/aggregates/        # Emergency, Zone, FieldReport, DistributionPlan
 │   │   ├── model/valueobjects/      # identifiers, PopulationImpact, UrgencyScore, enums…
 │   │   ├── events/                  # ZoneRegistered, FieldReportRegistered…
 │   │   ├── exceptions/              # EmergencyNotFound, EmergencyClosed…
 │   │   ├── repositories/            # repository interfaces
-│   │   └── services/                # ZoneIdentificationService, UrgencyScoringService
+│   │   └── services/                # ZoneIdentificationService, UrgencyScoringService,
+│   │                                # DistributionOptimizationService
 │   ├── application/                 # commands, queries, handlers, event handlers, ports
 │   ├── interfaces/rest/             # controllers, resources and assemblers
 │   └── infrastructure/
 │       ├── persistence/jpa/
-│       └── integration/aiservice/   # Anti-Corruption Layer to auxia-ai-service
+│       └── integration/
+│           ├── aiservice/           # Anti-Corruption Layer to auxia-ai-service
+│           ├── resourcemanagement/  # inventory and reservations, through its facade
+│           └── identityaccess/      # current role of a user, through its facade
 ├── resourcemanagement/
 │   ├── domain/                      # Inventory and Brigade with their entities, exceptions
 │   ├── application/                 # commands, handlers, InventoryQueryService, BrigadeQueryService
@@ -97,6 +101,7 @@ application starts.
 | V1 | Baseline: the five schemas of the project report (`assets/plant/SQL`). |
 | V2 | `zones.population`: people living in the zone, optional. The urgency score needs it. |
 | V3 | `field_reports.emergency_id`; `zone_id` becomes optional, so a report can be pending zone assignment (US-01). |
+| V4 | `distribution_plans`: organization, coverage and the last modification (who, when, why); `distribution_items.recommended_quantity`, so the original recommendation survives a modification (US-13, US-14). |
 
 Neon already had the schema of V1 when Flyway was added, so on Neon V1 is
 recorded as the baseline (`baseline-on-migrate`) and only V2 onwards run. An
@@ -157,7 +162,9 @@ predictable double imported with `FakeAiServiceConfiguration`.
 The endpoints need a signed-in user. Most REST tests and scenarios run as an
 `AUTHORITY` (`DefaultAuthorityUserConfiguration`) or pick another user with
 `TestUsers`. The Identity Access tests and the US-21 and US-22 scenarios sign in
-through the API and send the real token instead.
+through the API and send the real token instead. So do the distribution plan
+tests and the US-11 to US-14 scenarios, with `SignedInOrganization`, because each
+decision asks Identity Access for the current role of a user who must exist.
 
 ## Endpoints
 
@@ -194,6 +201,47 @@ name of the emergency appears in it (ignoring case and accents), the report is
 associated to that zone; otherwise it stays pending zone assignment until the
 authority assigns it (US-01, scenario 2).
 
+### Distribution plans (Emergency Management)
+
+| Method and path | Description |
+|---|---|
+| `POST /api/v1/emergencies/{emergencyId}/distribution-plans` | Recommend a distribution of the inventory of the organization among the prioritized zones (US-11). |
+| `GET /api/v1/emergencies/{emergencyId}/distribution-plans` | Plans of the emergency, from the most recent. Filter: `status`. |
+| `GET /api/v1/zones/{zoneId}/distribution-plans` | History of the zone: every plan with its decision, modification and justifications (US-14). |
+| `GET /api/v1/distribution-plans/{id}` | One plan, with the recommended and the current quantity of each resource. |
+| `PATCH /api/v1/distribution-plans/{id}/items` | Change quantities of a proposed plan, with a reason (US-13, US-14). |
+| `POST /api/v1/distribution-plans/{id}/approve` | Approve a proposed plan; no body, the authority comes from the token (US-12, TS-C01). |
+| `POST /api/v1/distribution-plans/{id}/reject` | Reject a proposed plan with a reason (US-14). |
+
+- A recommendation covers the whole emergency: the AI Service splits the
+  available stock of the organization of the authority among every zone with an
+  urgency score and identified needs, so zones compete for the same stock. Each
+  zone that receives something gets one `PROPOSED` plan, and its stock is
+  reserved at once, so two plans never count on the same units.
+- The answer lists the zones left partially (`PARTIAL`) or totally (`NONE`)
+  unattended for lack of inventory (US-11, scenario 2), and the zones left out:
+  `NO_SCORE` (no urgency score yet) or `NO_NEEDS` (no processed field report
+  mentions a need).
+- While the organization has `PROPOSED` plans of an emergency, a new
+  recommendation answers 409: approve or reject them first, so reserved stock
+  always belongs to a visible plan.
+- A zone with approved or executed plans can get another plan while it still
+  has needs. The recommendation sends the AI Service what those plans already
+  give the zone of each category (`alreadyAllocated`), which is taken from its
+  demand: the zone only gets what it still lacks, and a zone already covered
+  gets nothing. Rejected plans count for nothing.
+- A modification lists the resources to change; the others keep their
+  quantity, `0` takes a resource out and a new resource is added. Each line
+  keeps its recommended quantity, so the original recommendation and the
+  approved version are both kept (US-13, scenario 2). The reservation follows
+  the new quantities, which cannot exceed the available stock (409).
+- Rejecting releases the stock; an approved plan keeps it for the delivery. A
+  plan is approved once (409 the second time). Modifying and rejecting need a
+  reason (400), which stays in the history of the zone (US-14).
+- Before each decision the use case asks Identity Access whether the user is
+  still an active authority (QAD-02); if not, 403. Plans belong to the
+  organization of the user; a plan of another organization answers 404.
+
 ### Inventory (Resource Management)
 
 | Method and path | Description |
@@ -216,8 +264,9 @@ authority assigns it (US-01, scenario 2).
 - The organization is the one of the signed-in user. An inventory of another
   organization answers 404.
 - Other bounded contexts use `ResourceManagementContextFacade` in the same
-  process: available stock of an organization, and reserving or releasing the
-  resources of a distribution plan. A reservation holds every line or none.
+  process: available stock of an organization, and reserving, changing or
+  releasing the resources of a distribution plan. A plan has one reservation;
+  each operation applies every line or none.
 
 ### Brigades (Resource Management)
 
@@ -271,7 +320,7 @@ authority assigns it (US-01, scenario 2).
 
 | Role | Can change |
 |---|---|
-| `AUTHORITY` | Emergencies, zones, population impact, scores, field reports and their zone |
+| `AUTHORITY` | Emergencies, zones, population impact, scores, field reports and their zone, distribution plans |
 | `FIELD_BRIGADE` | Field reports (register and structure) |
 | `ORGANIZATION_ADMIN` | Inventory, brigades and the users of the organization |
 | `AUDITOR` | Nothing: reads only |

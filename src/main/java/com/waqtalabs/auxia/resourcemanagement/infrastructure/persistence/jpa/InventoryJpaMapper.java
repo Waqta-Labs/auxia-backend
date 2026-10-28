@@ -11,6 +11,7 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Reservat
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ResourceId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.StockLevel;
 import java.util.Map;
+import java.util.Set;
 import java.util.UUID;
 import java.util.function.Function;
 import java.util.stream.Collectors;
@@ -67,17 +68,34 @@ final class InventoryJpaMapper {
         row.inventory = entity;
         row.distributionPlanId = reservation.distributionPlanId().value();
         row.reservedAt = reservation.reservedAt();
-        reservation.lines().stream()
-            .map(
-                line ->
-                    new ReservationLineEmbeddable(
-                        entity.id, line.resourceId().value(), line.quantity()))
-            .forEach(row.lines::add);
         entity.reservations.add(row);
       }
+      copyLines(reservation, row, entity.id);
       row.status = reservation.status();
       row.closedAt = reservation.closedAt().orElse(null);
     }
+  }
+
+  /**
+   * Rewrites the lines of a reservation only when they changed, such as after a modification.
+   * Each resource appears once, so the order of the lines does not matter.
+   */
+  private static void copyLines(
+      Reservation reservation, ReservationJpaEntity row, UUID inventoryId) {
+    Set<ReservationLine> stored =
+        row.lines.stream()
+            .map(line -> new ReservationLine(new ResourceId(line.resourceId), line.quantity))
+            .collect(Collectors.toSet());
+    if (stored.equals(Set.copyOf(reservation.lines()))) {
+      return;
+    }
+    row.lines.clear();
+    reservation.lines().stream()
+        .map(
+            line ->
+                new ReservationLineEmbeddable(
+                    inventoryId, line.resourceId().value(), line.quantity()))
+        .forEach(row.lines::add);
   }
 
   private static StockItem toDomain(StockItemJpaEntity row) {

@@ -14,8 +14,10 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Resource
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.UnitOfMeasure;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -119,20 +121,30 @@ public final class Inventory {
     if (reservations.stream().anyMatch(reservation -> reservation.isFor(planId))) {
       throw new ReservationAlreadyExistsException(planId);
     }
-    Set<ResourceId> resources = new HashSet<>();
-    for (ReservationLine line : lines) {
-      if (!resources.add(line.resourceId())) {
-        throw new IllegalArgumentException("each resource appears in one line only");
-      }
-      StockItem item = stockItem(line.resourceId());
-      if (line.quantity() > item.available()) {
-        throw new InsufficientStockException(
-            line.resourceId(), item.available(), line.quantity());
-      }
-    }
+    checkAvailability(lines, Map.of());
     Reservation reservation = Reservation.open(planId, lines, reservedAt);
     lines.forEach(line -> stockItem(line.resourceId()).reserve(line.quantity()));
     reservations.add(reservation);
+  }
+
+  /**
+   * Replaces the lines held for a plan, for example when the authority changes its quantities
+   * before approving it. What the plan already holds counts as available for its new lines.
+   * Nothing changes if a line fails.
+   *
+   * @throws ReservationNotFoundException if the plan has no active reservation
+   * @throws ResourceNotFoundException if a line names a resource of another inventory
+   * @throws InsufficientStockException if a line asks for more than the available quantity
+   */
+  public void changeReservation(DistributionPlanId planId, List<ReservationLine> lines) {
+    Reservation reservation =
+        activeReservationOf(planId).orElseThrow(() -> new ReservationNotFoundException(planId));
+    Map<ResourceId, Integer> held = new HashMap<>();
+    reservation.lines().forEach(line -> held.put(line.resourceId(), line.quantity()));
+    checkAvailability(lines, held);
+    reservation.lines().forEach(line -> stockItem(line.resourceId()).release(line.quantity()));
+    lines.forEach(line -> stockItem(line.resourceId()).reserve(line.quantity()));
+    reservation.replaceLines(lines);
   }
 
   /**
@@ -168,6 +180,25 @@ public final class Inventory {
     return reservations.stream()
         .filter(reservation -> reservation.isFor(planId) && reservation.isActive())
         .findFirst();
+  }
+
+  /**
+   * Checks that every resource appears once and has enough stock for its line.
+   *
+   * @param held quantities already reserved for the plan, which its new lines can use again
+   */
+  private void checkAvailability(List<ReservationLine> lines, Map<ResourceId, Integer> held) {
+    Set<ResourceId> resources = new HashSet<>();
+    for (ReservationLine line : lines) {
+      if (!resources.add(line.resourceId())) {
+        throw new IllegalArgumentException("each resource appears in one line only");
+      }
+      int available =
+          stockItem(line.resourceId()).available() + held.getOrDefault(line.resourceId(), 0);
+      if (line.quantity() > available) {
+        throw new InsufficientStockException(line.resourceId(), available, line.quantity());
+      }
+    }
   }
 
   public boolean belongsTo(OrganizationId organizationId) {
