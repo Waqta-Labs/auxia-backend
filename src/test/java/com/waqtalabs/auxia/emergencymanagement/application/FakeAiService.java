@@ -17,6 +17,10 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneAll
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.domain.services.DistributionOptimizationService;
 import com.waqtalabs.auxia.emergencymanagement.domain.services.UrgencyScoringService;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Brigade;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.BrigadeId;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Location;
+import com.waqtalabs.auxia.resourcemanagement.domain.services.StaffAssignmentService;
 import com.waqtalabs.auxia.shared.application.exceptions.ExternalServiceUnavailableException;
 import java.math.BigDecimal;
 import java.math.RoundingMode;
@@ -45,13 +49,16 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *       category. A zone no longer needs a category it already has units of. A zone is FULL
  *       when it has every category it needs, NONE when it lacks some and receives nothing,
  *       and PARTIAL otherwise.
+ *   <li>The suggested brigade is the closest candidate to the zone, the first one on a tie, as
+ *       in rules-v1.
  *   <li>{@link #becomeUnavailable()} makes every call fail as if the service did not answer.
  * </ul>
  */
 public class FakeAiService
     implements FieldReportStructuringService,
         UrgencyScoringService,
-        DistributionOptimizationService {
+        DistributionOptimizationService,
+        StaffAssignmentService {
 
   public static final String MODEL_VERSION = "fake-v1";
   public static final LocalDateTime CALCULATED_AT = LocalDateTime.of(2026, 3, 14, 9, 30);
@@ -145,6 +152,15 @@ public class FakeAiService
     }
     topFeatures.sort(Comparator.comparingDouble(ScoreContribution::contribution).reversed());
     return new UrgencyScore(score, level(score), topFeatures, MODEL_VERSION, CALCULATED_AT);
+  }
+
+  @Override
+  public BrigadeId suggestBrigade(List<Brigade> candidates, Location zoneLocation) {
+    failIfUnavailable();
+    return candidates.stream()
+        .min(Comparator.comparingDouble(brigade -> brigade.baseLocation().distanceTo(zoneLocation)))
+        .orElseThrow()
+        .id();
   }
 
   @Override

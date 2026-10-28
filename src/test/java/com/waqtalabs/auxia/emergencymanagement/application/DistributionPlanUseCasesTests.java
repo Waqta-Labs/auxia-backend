@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 import static org.assertj.core.api.Assertions.tuple;
 
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.ApproveDistributionPlanCommandHandler;
+import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.AssignDistributionPlanBrigadeCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.GenerateDistributionRecommendationCommandHandler.ExcludedZone;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.GenerateDistributionRecommendationCommandHandler.UnattendedZone;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.GenerateDistributionRecommendationCommandHandler;
@@ -13,6 +14,7 @@ import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.Gener
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.ModifyDistributionPlanCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RejectDistributionPlanCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.ApproveDistributionPlanCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.commands.AssignDistributionPlanBrigadeCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.GenerateDistributionRecommendationCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.ModifyDistributionPlanCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RejectDistributionPlanCommand;
@@ -23,8 +25,10 @@ import com.waqtalabs.auxia.emergencymanagement.application.queryservices.Distrib
 import com.waqtalabs.auxia.emergencymanagement.domain.events.DistributionPlanApproved;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.DistributionPlanProposed;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.DistributionPlanRejected;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.DistributionPlanNotApprovedException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.DistributionPlanNotFoundException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyClosedForDistributionException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.NoAvailableBrigadeException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.NoAvailableStockException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.NoPrioritizedZonesException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.PendingDistributionPlansException;
@@ -34,6 +38,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldRepo
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AdministrativeLocation;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.BrigadeId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Coverage;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DistributionPlanStatus;
@@ -59,6 +64,7 @@ import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -104,6 +110,17 @@ class DistributionPlanUseCasesTests {
           plans, inventory, activeAuthorities::contains, events::add, CLOCK);
   private final DistributionPlanQueryService queries =
       new DistributionPlanQueryService(plans, emergencies, zones);
+  private final List<List<Object>> brigadeRequests = new ArrayList<>();
+  private Optional<BrigadeId> freeBrigade = Optional.of(new BrigadeId(UUID.randomUUID()));
+  private final AssignDistributionPlanBrigadeCommandHandler assignBrigade =
+      new AssignDistributionPlanBrigadeCommandHandler(
+          plans,
+          zones,
+          (organizationId, planId, zoneId, zoneLocation) -> {
+            brigadeRequests.add(List.of(organizationId, planId, zoneId, zoneLocation));
+            return freeBrigade;
+          },
+          activeAuthorities::contains);
 
   private final Emergency emergency = emergencies.save(emergency());
   private final ResourceId water = inventory.add("Agua 2.5 L", "WATER", 500);
@@ -324,6 +341,48 @@ class DistributionPlanUseCasesTests {
   }
 
   @Test
+  void approvedPlanGetsABrigadeForItsZone() {
+    Zone zone = prioritizedZone("Sector Alto Perú", 78.4, Need.WATER);
+    DistributionPlan plan = approvedPlan();
+
+    BrigadeId brigade =
+        assignBrigade.handle(
+            new AssignDistributionPlanBrigadeCommand(plan.id(), organization, Optional.empty()));
+
+    assertThat(brigade).isEqualTo(freeBrigade.orElseThrow());
+    assertThat(brigadeRequests)
+        .containsExactly(List.of(organization, plan.id(), zone.id(), Optional.empty()));
+  }
+
+  @Test
+  void onlyAnApprovedPlanGetsABrigade() {
+    prioritizedZone("Sector Alto Perú", 78.4, Need.WATER);
+    DistributionPlan plan = generate.handle(command()).plans().getFirst();
+    var command =
+        new AssignDistributionPlanBrigadeCommand(plan.id(), organization, Optional.of(authority));
+
+    assertThatThrownBy(() -> assignBrigade.handle(command))
+        .isInstanceOf(DistributionPlanNotApprovedException.class);
+    assertThat(brigadeRequests).isEmpty();
+  }
+
+  @Test
+  void planStaysWithoutBrigadeWhenNoneIsFree() {
+    prioritizedZone("Sector Alto Perú", 78.4, Need.WATER);
+    DistributionPlan plan = approvedPlan();
+    freeBrigade = Optional.empty();
+    var command =
+        new AssignDistributionPlanBrigadeCommand(plan.id(), organization, Optional.of(authority));
+
+    assertThatThrownBy(() -> assignBrigade.handle(command))
+        .isInstanceOf(NoAvailableBrigadeException.class);
+    activeAuthorities.clear();
+    assertThatThrownBy(() -> assignBrigade.handle(command))
+        .isInstanceOf(ActionNotAllowedException.class);
+    assertThat(brigadeRequests).hasSize(1);
+  }
+
+  @Test
   void rejectionKeepsItsReasonInTheHistoryOfTheZoneAndReleasesTheStock() {
     Zone zone = prioritizedZone("Sector Alto Perú", 78.4, Need.WATER);
     DistributionPlan plan = generate.handle(command()).plans().getFirst();
@@ -379,6 +438,11 @@ class DistributionPlanUseCasesTests {
                 new GetDistributionPlansByEmergencyIdQuery(
                     emergency.id(), organization, DistributionPlanStatus.PROPOSED)))
         .containsExactly(plan);
+  }
+
+  private DistributionPlan approvedPlan() {
+    DistributionPlan plan = generate.handle(command()).plans().getFirst();
+    return approve.handle(new ApproveDistributionPlanCommand(plan.id(), authority, organization));
   }
 
   private GenerateDistributionRecommendationCommand command() {
