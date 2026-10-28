@@ -48,6 +48,9 @@ class SecurityConfiguration {
                     .permitAll()
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/organizations/*/status")
                     .permitAll()
+                    // Anyone can verify a delivery with its public code (US-17, US-26).
+                    .requestMatchers(HttpMethod.GET, "/api/v1/deliveries/*/verify")
+                    .permitAll()
                     .requestMatchers(
                         "/swagger-ui.html",
                         "/swagger-ui/**",

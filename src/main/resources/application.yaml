@@ -27,6 +27,11 @@ spring:
     baseline-on-migrate: true
     baseline-version: 1
     baseline-description: schema of the project report
+  servlet:
+    multipart:
+      # Evidence of a delivery (TS-05): a few photos or documents per registration.
+      max-file-size: 10MB
+      max-request-size: 50MB
   jpa:
     open-in-view: false
     hibernate:
@@ -48,6 +53,25 @@ auxia:
     # Its key must be the same AI_SERVICE_API_KEY that the AI Service expects.
     base-url: ${AI_SERVICE_URL:http://localhost:8765}
     api-key: ${AI_SERVICE_API_KEY}
+  evidence-storage:
+    # Azure Blob Storage, or Azurite for local development (see the README).
+    connection-string: ${AZURE_STORAGE_CONNECTION_STRING}
+    container: ${AZURE_STORAGE_CONTAINER:evidences}
+  blockchain:
+    # DeliveryRegistry on Sepolia (auxia-smart-contracts/deployments/sepolia.json). The private
+    # key is the one of the wallet that owns the contract: only it can register deliveries.
+    rpc-url: ${BLOCKCHAIN_RPC_URL}
+    private-key: ${BLOCKCHAIN_PRIVATE_KEY}
+    contract-address: ${BLOCKCHAIN_CONTRACT_ADDRESS:0xe678347E182cbf00031401C97284AaB1C6b8148c}
+    chain-id: ${BLOCKCHAIN_CHAIN_ID:11155111}
+  traceability:
+    anchoring:
+      # In the background, so the brigade does not wait for a block.
+      asynchronous: true
+      # Deliveries not anchored yet are tried again this often, up to max-attempts transactions.
+      retry-enabled: true
+      retry-interval: 5m
+      max-attempts: 10
 
 info:
   app:
