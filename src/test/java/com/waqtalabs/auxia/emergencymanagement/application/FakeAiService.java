@@ -1,12 +1,21 @@
 package com.waqtalabs.auxia.emergencymanagement.application;
 
 import com.waqtalabs.auxia.emergencymanagement.application.ports.FieldReportStructuringService;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AvailableResource;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Coverage;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DistributionRecommendation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PrioritizedZone;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PriorityLevel;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ResourceQuantity;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ScoreContribution;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyIndicators;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneAllocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
+import com.waqtalabs.auxia.emergencymanagement.domain.services.DistributionOptimizationService;
 import com.waqtalabs.auxia.emergencymanagement.domain.services.UrgencyScoringService;
 import com.waqtalabs.auxia.shared.application.exceptions.ExternalServiceUnavailableException;
 import java.math.BigDecimal;
@@ -14,6 +23,8 @@ import java.math.RoundingMode;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -29,10 +40,17 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *   <li>The score is {@code 40 × damage + 60 × peopleAffected / population}, with the damage
  *       factors of rules-v1 (LOW 0.25 … CRITICAL 1) and the same priority thresholds (75, 50,
  *       25). Its top features are those two contributions.
+ *   <li>The distribution recommendation is what a test set with {@link #willRecommend}, and
+ *       otherwise each resource goes, all of it, to the most urgent zone that needs its
+ *       category. A zone is FULL when it receives every category it needs, NONE when it
+ *       receives nothing, and PARTIAL otherwise.
  *   <li>{@link #becomeUnavailable()} makes every call fail as if the service did not answer.
  * </ul>
  */
-public class FakeAiService implements FieldReportStructuringService, UrgencyScoringService {
+public class FakeAiService
+    implements FieldReportStructuringService,
+        UrgencyScoringService,
+        DistributionOptimizationService {
 
   public static final String MODEL_VERSION = "fake-v1";
   public static final LocalDateTime CALCULATED_AT = LocalDateTime.of(2026, 3, 14, 9, 30);
@@ -58,10 +76,17 @@ public class FakeAiService implements FieldReportStructuringService, UrgencyScor
   private final Map<String, StructuredFieldData> structuredTexts = new ConcurrentHashMap<>();
   private final List<String> structuringCalls = new CopyOnWriteArrayList<>();
   private final List<UrgencyIndicators> scoringCalls = new CopyOnWriteArrayList<>();
+  private final List<List<PrioritizedZone>> recommendationCalls = new CopyOnWriteArrayList<>();
+  private volatile DistributionRecommendation recommendation;
   private volatile boolean unavailable;
 
   public void willStructure(String text, StructuredFieldData data) {
     structuredTexts.put(text, data);
+  }
+
+  /** The next recommendations are this one, until {@link #reset()}. */
+  public void willRecommend(DistributionRecommendation recommendation) {
+    this.recommendation = recommendation;
   }
 
   public void becomeUnavailable() {
@@ -77,6 +102,8 @@ public class FakeAiService implements FieldReportStructuringService, UrgencyScor
     structuredTexts.clear();
     structuringCalls.clear();
     scoringCalls.clear();
+    recommendationCalls.clear();
+    recommendation = null;
     unavailable = false;
   }
 
@@ -88,6 +115,11 @@ public class FakeAiService implements FieldReportStructuringService, UrgencyScor
   /** Indicators sent to score, in order. */
   public List<UrgencyIndicators> scoringCalls() {
     return new ArrayList<>(scoringCalls);
+  }
+
+  /** Zones sent to each recommendation, in order. */
+  public List<List<PrioritizedZone>> recommendationCalls() {
+    return new ArrayList<>(recommendationCalls);
   }
 
   @Override
@@ -112,6 +144,52 @@ public class FakeAiService implements FieldReportStructuringService, UrgencyScor
     }
     topFeatures.sort(Comparator.comparingDouble(ScoreContribution::contribution).reversed());
     return new UrgencyScore(score, level(score), topFeatures, MODEL_VERSION, CALCULATED_AT);
+  }
+
+  @Override
+  public DistributionRecommendation recommend(
+      List<PrioritizedZone> zones, List<AvailableResource> inventory) {
+    failIfUnavailable();
+    recommendationCalls.add(List.copyOf(zones));
+    if (recommendation != null) {
+      return recommendation;
+    }
+    List<PrioritizedZone> byUrgency =
+        zones.stream()
+            .sorted(Comparator.comparingDouble(PrioritizedZone::score).reversed())
+            .toList();
+    Map<ZoneId, List<ResourceQuantity>> items = new LinkedHashMap<>();
+    Map<ZoneId, Set<Need>> covered = new LinkedHashMap<>();
+    zones.forEach(zone -> items.put(zone.zoneId(), new ArrayList<>()));
+    for (AvailableResource resource : inventory) {
+      Need category = Need.valueOf(resource.category());
+      byUrgency.stream()
+          .filter(zone -> zone.needs().contains(category))
+          .findFirst()
+          .ifPresent(
+              zone -> {
+                items
+                    .get(zone.zoneId())
+                    .add(new ResourceQuantity(resource.resourceId(), resource.available()));
+                covered.computeIfAbsent(zone.zoneId(), id -> new HashSet<>()).add(category);
+              });
+    }
+    List<ZoneAllocation> allocations =
+        zones.stream()
+            .map(
+                zone -> {
+                  Set<Need> received = covered.getOrDefault(zone.zoneId(), Set.of());
+                  Coverage coverage =
+                      received.isEmpty()
+                          ? Coverage.NONE
+                          : received.containsAll(zone.needs())
+                              ? Coverage.FULL
+                              : Coverage.PARTIAL;
+                  return new ZoneAllocation(zone.zoneId(), items.get(zone.zoneId()), coverage);
+                })
+            .toList();
+    return new DistributionRecommendation(
+        allocations, "Fake: each resource to the most urgent zone", MODEL_VERSION);
   }
 
   private void failIfUnavailable() {
