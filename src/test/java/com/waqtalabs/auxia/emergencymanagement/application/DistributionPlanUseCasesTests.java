@@ -191,6 +191,33 @@ class DistributionPlanUseCasesTests {
   }
 
   @Test
+  void zoneWithAnApprovedPlanCanReceiveAnotherOneWhileItStillHasNeeds() {
+    Zone zone = prioritizedZone("Sector Alto Perú", 78.4, Need.WATER);
+    DistributionPlan first = generate.handle(command()).plans().getFirst();
+    modify.handle(
+        new ModifyDistributionPlanCommand(
+            first.id(),
+            authority,
+            organization,
+            List.of(new ResourceQuantity(water, 200)),
+            "Solo 200 llegan en el primer viaje"));
+    approve.handle(new ApproveDistributionPlanCommand(first.id(), authority, organization));
+
+    DistributionPlan second = generate.handle(command()).plans().getFirst();
+
+    assertThat(second.id()).isNotEqualTo(first.id());
+    assertThat(second.zoneId()).isEqualTo(zone.id());
+    assertThat(second.distributedQuantities()).containsExactly(new ResourceQuantity(water, 300));
+    assertThat(inventory.reservationOf(first.id()))
+        .containsExactly(new ResourceQuantity(water, 200));
+    assertThat(inventory.available(water)).isZero();
+    assertThat(queries.handle(new GetDistributionPlansByZoneIdQuery(zone.id(), organization)))
+        .extracting(DistributionPlan::status)
+        .containsExactlyInAnyOrder(
+            DistributionPlanStatus.PROPOSED, DistributionPlanStatus.APPROVED);
+  }
+
+  @Test
   void recommendationNeedsAnActiveEmergencyPrioritizedZonesAndStock() {
     assertThatThrownBy(() -> generate.handle(command()))
         .isInstanceOf(NoPrioritizedZonesException.class);
