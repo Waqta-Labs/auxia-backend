@@ -168,6 +168,22 @@ class ZoneTests {
   }
 
   @Test
+  void deliveredAidServesTheZoneAndKeepsTheLatestDate() {
+    Zone zone = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
+    var morning = LocalDateTime.of(2026, 3, 15, 10, 30);
+
+    zone.markServed(morning);
+    zone.markServed(morning.minusDays(1));
+
+    assertThat(zone.status()).isEqualTo(ZoneStatus.SERVED);
+    assertThat(zone.lastAidReceivedAt()).contains(morning);
+    zone.updateUrgencyScore(
+        new UrgencyScore(80.0, PriorityLevel.CRITICAL, List.of(), "rules-v1", morning));
+    assertThat(zone.status()).isEqualTo(ZoneStatus.PRIORITIZED);
+    assertThat(zone.lastAidReceivedAt()).contains(morning);
+  }
+
+  @Test
   void reconstitutedZoneKeepsItsStatus() {
     Zone stored = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
 
@@ -180,6 +196,7 @@ class ZoneTests {
             stored.populationImpact(),
             stored.damageLevel(),
             ZoneStatus.PRIORITIZED,
+            null,
             null);
 
     assertThat(zone.id()).isEqualTo(stored.id());

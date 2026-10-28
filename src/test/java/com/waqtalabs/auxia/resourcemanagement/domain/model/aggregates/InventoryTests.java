@@ -199,6 +199,38 @@ class InventoryTests {
   }
 
   @Test
+  void deliveryTakesOutWhatItGaveAndFreesTheRestOfTheReservation() {
+    inventory.restock(water, 100);
+    inventory.restock(food, 40);
+    inventory.reserve(
+        PLAN, List.of(new ReservationLine(water, 60), new ReservationLine(food, 40)), NOW);
+
+    inventory.consumeReservation(PLAN, List.of(new ReservationLine(water, 50)), NOW.plusHours(6));
+
+    assertThat(inventory.stockItem(water).stockLevel()).isEqualTo(new StockLevel(50, 0));
+    assertThat(inventory.stockItem(food).stockLevel()).isEqualTo(new StockLevel(40, 0));
+    Reservation consumed = inventory.reservations().getFirst();
+    assertThat(consumed.status()).isEqualTo(ReservationStatus.CONSUMED);
+    assertThat(consumed.closedAt()).contains(NOW.plusHours(6));
+    assertThat(inventory.activeReservationOf(PLAN)).isEmpty();
+  }
+
+  @Test
+  void deliveryBeyondItsReservationConsumesNothing() {
+    inventory.restock(water, 100);
+    inventory.reserve(PLAN, List.of(new ReservationLine(water, 60)), NOW);
+    var beyond = List.of(new ReservationLine(water, 61));
+    var notReserved = List.of(new ReservationLine(food, 1));
+
+    assertThatThrownBy(() -> inventory.consumeReservation(PLAN, beyond, NOW))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThatThrownBy(() -> inventory.consumeReservation(PLAN, notReserved, NOW))
+        .isInstanceOf(IllegalArgumentException.class);
+    assertThat(inventory.stockItem(water).stockLevel()).isEqualTo(new StockLevel(100, 60));
+    assertThat(inventory.activeReservationOf(PLAN)).isPresent();
+  }
+
+  @Test
   void changedReservationHoldsItsNewLinesAndCanUseWhatItAlreadyHeld() {
     inventory.restock(water, 100);
     inventory.restock(food, 40);

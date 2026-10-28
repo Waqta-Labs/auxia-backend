@@ -11,16 +11,17 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.request.RequestPostProcessor;
 
 /**
- * An organization registered through the API, with an ORGANIZATION_ADMIN, an AUTHORITY and an
- * AUDITOR who signed in. Their requests carry real tokens, so the JWT filter and the checks of
- * Identity Access run as in production; use it when a use case asks Identity Access for the
- * current role of the user.
+ * An organization registered through the API, with an ORGANIZATION_ADMIN, an AUTHORITY, a
+ * FIELD_BRIGADE member and an AUDITOR who signed in. Their requests carry real tokens, so the JWT
+ * filter and the checks of Identity Access run as in production; use it when a use case asks
+ * Identity Access for the current role of the user.
  */
 public record SignedInOrganization(
     UUID organizationId,
     UUID authorityId,
     String administratorToken,
     String authorityToken,
+    String fieldBrigadeToken,
     String auditorToken) {
 
   private static final String PLATFORM_KEY = "test-platform-key-0123456789";
@@ -60,6 +61,8 @@ public record SignedInOrganization(
     String authorityEmail = uniqueEmail();
     UUID authorityId =
         registerUser(mockMvc, administratorToken, organizationId, authorityEmail, "AUTHORITY");
+    String fieldBrigadeEmail = uniqueEmail();
+    registerUser(mockMvc, administratorToken, organizationId, fieldBrigadeEmail, "FIELD_BRIGADE");
     String auditorEmail = uniqueEmail();
     registerUser(mockMvc, administratorToken, organizationId, auditorEmail, "AUDITOR");
     return new SignedInOrganization(
@@ -67,6 +70,7 @@ public record SignedInOrganization(
         authorityId,
         administratorToken,
         signIn(mockMvc, authorityEmail),
+        signIn(mockMvc, fieldBrigadeEmail),
         signIn(mockMvc, auditorEmail));
   }
 
@@ -76,6 +80,10 @@ public record SignedInOrganization(
 
   public RequestPostProcessor authority() {
     return bearer(authorityToken);
+  }
+
+  public RequestPostProcessor fieldBrigade() {
+    return bearer(fieldBrigadeToken);
   }
 
   public RequestPostProcessor auditor() {
