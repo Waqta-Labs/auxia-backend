@@ -14,6 +14,9 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Distribut
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Emergency;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.OrganizationId;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ResourceId;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.DistributionPlanRepository;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.EmergencyRepository;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.FieldReportRepository;
@@ -31,6 +34,8 @@ import com.waqtalabs.auxia.shared.application.events.DomainEventPublisher;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.EnumMap;
+import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -43,6 +48,8 @@ import org.springframework.transaction.annotation.Transactional;
  * zones of an emergency (US-11). It asks DistributionOptimizationService for one recommendation
  * across every zone with an urgency score and identified needs, proposes one plan for each zone
  * that receives something, and reserves its stock, so two plans never count on the same units.
+ * A zone with approved or executed plans can get another one: the recommendation receives what
+ * they already give it, so the zone only gets what it still lacks.
  * Everything happens in one transaction: if a reservation fails, no plan is proposed.
  */
 @Service
@@ -103,11 +110,18 @@ public class GenerateDistributionRecommendationCommandHandler {
       throw new PendingDistributionPlansException(emergency.id());
     }
 
+    List<AvailableResource> inventory =
+        inventoryAvailability.availableStock(command.organizationId());
+    Map<ResourceId, Need> categories = new HashMap<>();
+    inventory.forEach(
+        resource -> categories.put(resource.resourceId(), Need.valueOf(resource.category())));
+
     Map<ZoneId, Zone> prioritized = new LinkedHashMap<>();
     List<PrioritizedZone> zones = new ArrayList<>();
     List<ExcludedZone> excluded = new ArrayList<>();
     for (Zone zone : zoneRepository.findByEmergencyId(emergency.id())) {
-      Optional<PrioritizedZone> candidate = prioritize(zone);
+      Optional<PrioritizedZone> candidate =
+          prioritize(zone, allocatedTo(zone, command.organizationId(), categories));
       if (candidate.isEmpty()) {
         ExclusionReason reason =
             zone.urgencyScore().isEmpty() ? ExclusionReason.NO_SCORE : ExclusionReason.NO_NEEDS;
@@ -121,9 +135,7 @@ public class GenerateDistributionRecommendationCommandHandler {
       throw new NoPrioritizedZonesException(emergency.id());
     }
     List<AvailableResource> stock =
-        inventoryAvailability.availableStock(command.organizationId()).stream()
-            .filter(resource -> resource.available() > 0)
-            .toList();
+        inventory.stream().filter(resource -> resource.available() > 0).toList();
     if (stock.isEmpty()) {
       throw new NoAvailableStockException(emergency.id());
     }
@@ -149,7 +161,7 @@ public class GenerateDistributionRecommendationCommandHandler {
   }
 
   /** The zone as the recommendation receives it, or empty without a score or needs. */
-  private Optional<PrioritizedZone> prioritize(Zone zone) {
+  private Optional<PrioritizedZone> prioritize(Zone zone, Map<Need, Integer> allocated) {
     if (zone.urgencyScore().isEmpty() || !zone.hasSufficientDataForScoring()) {
       return Optional.empty();
     }
@@ -167,7 +179,26 @@ public class GenerateDistributionRecommendationCommandHandler {
             zone.id(),
             zone.urgencyScore().get().value(),
             indicators.peopleAffected(),
-            indicators.needs()));
+            indicators.needs(),
+            allocated));
+  }
+
+  /**
+   * Units of each category that the approved or executed plans of the organization already give
+   * the zone. A resource is counted in the category it has in the inventory.
+   */
+  private Map<Need, Integer> allocatedTo(
+      Zone zone, OrganizationId organizationId, Map<ResourceId, Need> categories) {
+    Map<Need, Integer> allocated = new EnumMap<>(Need.class);
+    distributionPlanRepository.findByZoneId(zone.id(), organizationId).stream()
+        .filter(DistributionPlan::allocatesResources)
+        .flatMap(plan -> plan.distributedQuantities().stream())
+        .filter(quantity -> categories.containsKey(quantity.resourceId()))
+        .forEach(
+            quantity ->
+                allocated.merge(
+                    categories.get(quantity.resourceId()), quantity.quantity(), Integer::sum));
+    return allocated;
   }
 
   private DistributionPlan propose(

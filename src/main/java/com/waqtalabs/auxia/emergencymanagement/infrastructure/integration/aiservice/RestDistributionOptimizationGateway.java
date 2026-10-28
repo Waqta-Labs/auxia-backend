@@ -11,14 +11,15 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneAll
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.domain.services.DistributionOptimizationService;
 import java.util.List;
+import java.util.Map;
 import java.util.UUID;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestClient;
 
 /**
  * Anti-Corruption Layer to {@code POST /api/v1/distribution-recommendations} of the AI Service.
- * The needs of each zone are sent in a fixed order, so the same zones always make the same
- * request.
+ * The needs and the already allocated categories of each zone are sent in a fixed order, so the
+ * same zones always make the same request.
  */
 @Component
 class RestDistributionOptimizationGateway implements DistributionOptimizationService {
@@ -43,7 +44,15 @@ class RestDistributionOptimizationGateway implements DistributionOptimizationSer
                             zone.zoneId().value(),
                             zone.score(),
                             zone.peopleAffected(),
-                            zone.needs().stream().sorted().toList()))
+                            zone.needs().stream().sorted().toList(),
+                            zone.alreadyAllocated().entrySet().stream()
+                                .filter(allocated -> allocated.getValue() > 0)
+                                .sorted(Map.Entry.comparingByKey())
+                                .map(
+                                    allocated ->
+                                        new AllocatedRequest(
+                                            allocated.getKey(), allocated.getValue()))
+                                .toList()))
                 .toList(),
             inventory.stream()
                 .map(
@@ -84,7 +93,14 @@ class RestDistributionOptimizationGateway implements DistributionOptimizationSer
 
   record RecommendationRequest(List<ZoneRequest> zones, List<ResourceRequest> inventory) {}
 
-  record ZoneRequest(UUID zoneId, double score, int peopleAffected, List<Need> needs) {}
+  record ZoneRequest(
+      UUID zoneId,
+      double score,
+      int peopleAffected,
+      List<Need> needs,
+      List<AllocatedRequest> alreadyAllocated) {}
+
+  record AllocatedRequest(Need category, int quantity) {}
 
   record ResourceRequest(UUID resourceId, String category, String unit, int availableQuantity) {}
 

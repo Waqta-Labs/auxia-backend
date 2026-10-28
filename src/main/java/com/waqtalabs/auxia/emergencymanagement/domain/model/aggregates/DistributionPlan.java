@@ -252,6 +252,11 @@ public final class DistributionPlan {
     return status == DistributionPlanStatus.PROPOSED;
   }
 
+  /** Whether the plan gives its resources to the zone: it is approved or already executed. */
+  public boolean allocatesResources() {
+    return status == DistributionPlanStatus.APPROVED || status == DistributionPlanStatus.EXECUTED;
+  }
+
   public boolean isApproved() {
     return status == DistributionPlanStatus.APPROVED;
   }
