@@ -88,6 +88,12 @@ springdoc:
     tags-sorter: alpha
     operations-sorter: method
 
+logging:
+  level:
+    # The JDK HTTP client sets Content-Length by itself, and the Azure SDK warns on every
+    # request that it cannot set it. The files are stored correctly.
+    com.azure.core.http.jdk.httpclient.JdkHttpClient: error
+
 management:
   endpoints:
     web:
