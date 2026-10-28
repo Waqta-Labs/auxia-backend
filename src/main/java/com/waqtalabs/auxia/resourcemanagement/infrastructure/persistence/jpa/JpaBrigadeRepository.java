@@ -2,6 +2,7 @@ package com.waqtalabs.auxia.resourcemanagement.infrastructure.persistence.jpa;
 
 import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Brigade;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.BrigadeId;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.DistributionPlanId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.resourcemanagement.domain.repositories.BrigadeRepository;
 import java.util.List;
@@ -43,5 +44,13 @@ class JpaBrigadeRepository implements BrigadeRepository {
     return repository.findByOrganizationIdOrderByNameAsc(organizationId.value()).stream()
         .map(BrigadeJpaMapper::toDomain)
         .toList();
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Optional<Brigade> findByAssignedPlan(DistributionPlanId planId) {
+    return repository
+        .findByAssignmentsDistributionPlanId(planId.value())
+        .map(BrigadeJpaMapper::toDomain);
   }
 }
