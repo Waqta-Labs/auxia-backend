@@ -1,7 +1,9 @@
 package com.waqtalabs.auxia.resourcemanagement.interfaces.acl;
 
+import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.ChangeReservationCommandHandler;
 import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.ReleaseReservationCommandHandler;
 import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.ReserveResourcesCommandHandler;
+import com.waqtalabs.auxia.resourcemanagement.application.commands.ChangeReservationCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.ReleaseReservationCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.ReserveResourcesCommand;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.DistributionPlanId;
@@ -29,14 +31,17 @@ public class ResourceManagementContextFacade {
 
   private final InventoryRepository inventoryRepository;
   private final ReserveResourcesCommandHandler reserveResources;
+  private final ChangeReservationCommandHandler changeReservation;
   private final ReleaseReservationCommandHandler releaseReservation;
 
   public ResourceManagementContextFacade(
       InventoryRepository inventoryRepository,
       ReserveResourcesCommandHandler reserveResources,
+      ChangeReservationCommandHandler changeReservation,
       ReleaseReservationCommandHandler releaseReservation) {
     this.inventoryRepository = inventoryRepository;
     this.reserveResources = reserveResources;
+    this.changeReservation = changeReservation;
     this.releaseReservation = releaseReservation;
   }
 
@@ -67,16 +72,28 @@ public class ResourceManagementContextFacade {
         new ReserveResourcesCommand(
             new OrganizationId(organizationId),
             new DistributionPlanId(distributionPlanId),
-            lines.stream()
-                .map(
-                    line ->
-                        new ReservationLine(new ResourceId(line.resourceId()), line.quantity()))
-                .toList()));
+            toReservationLines(lines)));
+  }
+
+  /**
+   * Replaces the lines held for the plan. What the plan already holds counts as available, and
+   * nothing changes if one line cannot be reserved.
+   */
+  public void changeReservation(UUID distributionPlanId, List<ReservationLineResource> lines) {
+    changeReservation.handle(
+        new ChangeReservationCommand(
+            new DistributionPlanId(distributionPlanId), toReservationLines(lines)));
   }
 
   /** Makes the stock held for the plan available again. */
   public void releaseReservation(UUID distributionPlanId) {
     releaseReservation.handle(
         new ReleaseReservationCommand(new DistributionPlanId(distributionPlanId)));
+  }
+
+  private static List<ReservationLine> toReservationLines(List<ReservationLineResource> lines) {
+    return lines.stream()
+        .map(line -> new ReservationLine(new ResourceId(line.resourceId()), line.quantity()))
+        .toList();
   }
 }
