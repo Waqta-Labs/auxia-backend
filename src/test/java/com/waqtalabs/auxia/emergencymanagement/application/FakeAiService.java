@@ -41,9 +41,10 @@ import java.util.concurrent.CopyOnWriteArrayList;
  *       factors of rules-v1 (LOW 0.25 … CRITICAL 1) and the same priority thresholds (75, 50,
  *       25). Its top features are those two contributions.
  *   <li>The distribution recommendation is what a test set with {@link #willRecommend}, and
- *       otherwise each resource goes, all of it, to the most urgent zone that needs its
- *       category. A zone is FULL when it receives every category it needs, NONE when it
- *       receives nothing, and PARTIAL otherwise.
+ *       otherwise each resource goes, all of it, to the most urgent zone that still needs its
+ *       category. A zone no longer needs a category it already has units of. A zone is FULL
+ *       when it has every category it needs, NONE when it lacks some and receives nothing,
+ *       and PARTIAL otherwise.
  *   <li>{@link #becomeUnavailable()} makes every call fail as if the service did not answer.
  * </ul>
  */
@@ -164,7 +165,7 @@ public class FakeAiService
     for (AvailableResource resource : inventory) {
       Need category = Need.valueOf(resource.category());
       byUrgency.stream()
-          .filter(zone -> zone.needs().contains(category))
+          .filter(zone -> stillNeeds(zone).contains(category))
           .findFirst()
           .ifPresent(
               zone -> {
@@ -179,17 +180,28 @@ public class FakeAiService
             .map(
                 zone -> {
                   Set<Need> received = covered.getOrDefault(zone.zoneId(), Set.of());
+                  Set<Need> missing = new HashSet<>(stillNeeds(zone));
+                  missing.removeAll(received);
                   Coverage coverage =
-                      received.isEmpty()
-                          ? Coverage.NONE
-                          : received.containsAll(zone.needs())
-                              ? Coverage.FULL
-                              : Coverage.PARTIAL;
+                      missing.isEmpty()
+                          ? Coverage.FULL
+                          : received.isEmpty() ? Coverage.NONE : Coverage.PARTIAL;
                   return new ZoneAllocation(zone.zoneId(), items.get(zone.zoneId()), coverage);
                 })
             .toList();
     return new DistributionRecommendation(
         allocations, "Fake: each resource to the most urgent zone", MODEL_VERSION);
+  }
+
+  private static Set<Need> stillNeeds(PrioritizedZone zone) {
+    Set<Need> needs = new HashSet<>(zone.needs());
+    zone.alreadyAllocated().forEach(
+        (category, quantity) -> {
+          if (quantity > 0) {
+            needs.remove(category);
+          }
+        });
+    return needs;
   }
 
   private void failIfUnavailable() {

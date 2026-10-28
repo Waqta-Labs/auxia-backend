@@ -58,6 +58,7 @@ import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -191,30 +192,63 @@ class DistributionPlanUseCasesTests {
   }
 
   @Test
-  void zoneWithAnApprovedPlanCanReceiveAnotherOneWhileItStillHasNeeds() {
-    Zone zone = prioritizedZone("Sector Alto Perú", 78.4, Need.WATER);
+  void zoneWithAnApprovedPlanGetsAnotherOneOnlyForWhatItStillLacks() {
+    Zone zone = prioritizedZone("Sector Alto Perú", 78.4, Need.WATER, Need.FOOD);
     DistributionPlan first = generate.handle(command()).plans().getFirst();
     modify.handle(
         new ModifyDistributionPlanCommand(
             first.id(),
             authority,
             organization,
-            List.of(new ResourceQuantity(water, 200)),
-            "Solo 200 llegan en el primer viaje"));
+            List.of(new ResourceQuantity(food, 0)),
+            "Los víveres llegan en el segundo viaje"));
     approve.handle(new ApproveDistributionPlanCommand(first.id(), authority, organization));
 
     DistributionPlan second = generate.handle(command()).plans().getFirst();
 
+    assertThat(aiService.recommendationCalls().getLast())
+        .singleElement()
+        .extracting(PrioritizedZone::alreadyAllocated)
+        .isEqualTo(Map.of(Need.WATER, 500));
     assertThat(second.id()).isNotEqualTo(first.id());
     assertThat(second.zoneId()).isEqualTo(zone.id());
-    assertThat(second.distributedQuantities()).containsExactly(new ResourceQuantity(water, 300));
+    assertThat(second.distributedQuantities()).containsExactly(new ResourceQuantity(food, 300));
     assertThat(inventory.reservationOf(first.id()))
-        .containsExactly(new ResourceQuantity(water, 200));
-    assertThat(inventory.available(water)).isZero();
+        .containsExactly(new ResourceQuantity(water, 500));
     assertThat(queries.handle(new GetDistributionPlansByZoneIdQuery(zone.id(), organization)))
         .extracting(DistributionPlan::status)
         .containsExactlyInAnyOrder(
             DistributionPlanStatus.PROPOSED, DistributionPlanStatus.APPROVED);
+  }
+
+  @Test
+  void zoneWhoseNeedsApprovedPlansCoverGetsNothingMore() {
+    Zone covered = prioritizedZone("Sector Alto Perú", 78.4, Need.WATER);
+    DistributionPlan first = generate.handle(command()).plans().getFirst();
+    approve.handle(new ApproveDistributionPlanCommand(first.id(), authority, organization));
+    Zone other = prioritizedZone("Quebrada Pedregal", 41.0, Need.FOOD);
+
+    GeneratedRecommendation second = generate.handle(command());
+
+    assertThat(second.plans()).extracting(DistributionPlan::zoneId).containsExactly(other.id());
+    assertThat(second.unattendedZones()).isEmpty();
+    assertThat(queries.handle(new GetDistributionPlansByZoneIdQuery(covered.id(), organization)))
+        .containsExactly(plans.findById(first.id()).orElseThrow());
+  }
+
+  @Test
+  void rejectedPlansGiveTheZoneNothing() {
+    prioritizedZone("Sector Alto Perú", 78.4, Need.WATER);
+    DistributionPlan first = generate.handle(command()).plans().getFirst();
+    reject.handle(
+        new RejectDistributionPlanCommand(first.id(), authority, organization, "Vía bloqueada"));
+
+    generate.handle(command());
+
+    assertThat(aiService.recommendationCalls().getLast())
+        .singleElement()
+        .extracting(PrioritizedZone::alreadyAllocated)
+        .isEqualTo(Map.of());
   }
 
   @Test

@@ -42,6 +42,7 @@ class DistributionPlanTests {
   void proposedPlanKeepsTheRecommendationAndWaitsForADecision() {
     assertThat(plan.status()).isEqualTo(DistributionPlanStatus.PROPOSED);
     assertThat(plan.isPending()).isTrue();
+    assertThat(plan.allocatesResources()).isFalse();
     assertThat(plan.coverage()).isEqualTo(Coverage.PARTIAL);
     assertThat(plan.justification()).isEqualTo("Proporcional al score");
     assertThat(plan.modelVersion()).isEqualTo("rules-v1");
@@ -80,6 +81,7 @@ class DistributionPlanTests {
 
     assertThat(plan.status()).isEqualTo(DistributionPlanStatus.APPROVED);
     assertThat(plan.isApproved()).isTrue();
+    assertThat(plan.allocatesResources()).isTrue();
     assertThat(plan.decision()).contains(new PlanDecision(authority, NOW.plusHours(1)));
     assertThat(plan.rejectedReason()).isEmpty();
   }
@@ -103,6 +105,7 @@ class DistributionPlanTests {
 
     assertThat(plan.status()).isEqualTo(DistributionPlanStatus.REJECTED);
     assertThat(plan.rejectedReason()).contains("La vía está bloqueada");
+    assertThat(plan.allocatesResources()).isFalse();
     assertThat(plan.decision()).contains(new PlanDecision(authority, NOW));
     assertThatThrownBy(() -> plan.approve(authority, NOW))
         .isInstanceOf(DistributionPlanNotPendingException.class);
@@ -199,6 +202,7 @@ class DistributionPlanTests {
     plan.markExecuted();
 
     assertThat(plan.status()).isEqualTo(DistributionPlanStatus.EXECUTED);
+    assertThat(plan.allocatesResources()).isTrue();
     assertThat(plan.decision()).isPresent();
   }
 

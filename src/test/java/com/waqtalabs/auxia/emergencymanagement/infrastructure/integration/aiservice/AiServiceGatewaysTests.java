@@ -33,6 +33,7 @@ import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -197,13 +198,18 @@ class AiServiceGatewaysTests {
                           "zoneId": "5b0c2f6e-8a1d-4c47-9f3e-2d6a1b7c9e01",
                           "score": 78.4,
                           "peopleAffected": 140,
-                          "needs": ["WATER", "FOOD"]
+                          "needs": ["WATER", "FOOD"],
+                          "alreadyAllocated": [
+                            { "category": "WATER", "quantity": 100 },
+                            { "category": "FOOD", "quantity": 140 }
+                          ]
                         },
                         {
                           "zoneId": "a3e9d4c2-1f6b-4e8a-b5d7-0c2e4f6a8b02",
                           "score": 41.0,
                           "peopleAffected": 90,
-                          "needs": ["WATER"]
+                          "needs": ["WATER"],
+                          "alreadyAllocated": []
                         }
                       ],
                       "inventory": [
@@ -251,7 +257,12 @@ class AiServiceGatewaysTests {
     DistributionRecommendation recommendation =
         optimization.recommend(
             List.of(
-                new PrioritizedZone(new ZoneId(altoPeru), 78.4, 140, Set.of(Need.FOOD, Need.WATER)),
+                new PrioritizedZone(
+                    new ZoneId(altoPeru),
+                    78.4,
+                    140,
+                    Set.of(Need.FOOD, Need.WATER),
+                    Map.of(Need.FOOD, 140, Need.WATER, 100, Need.SHELTER, 0)),
                 new PrioritizedZone(new ZoneId(pedregal), 41.0, 90, Set.of(Need.WATER))),
             List.of(
                 new AvailableResource(new ResourceId(water), "Agua", "WATER", "LITER", 500),
