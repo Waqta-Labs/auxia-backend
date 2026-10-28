@@ -225,6 +225,11 @@ authority assigns it (US-01, scenario 2).
 - While the organization has `PROPOSED` plans of an emergency, a new
   recommendation answers 409: approve or reject them first, so reserved stock
   always belongs to a visible plan.
+- A zone with approved or executed plans can get another plan while it still
+  has needs. The recommendation sends the AI Service what those plans already
+  give the zone of each category (`alreadyAllocated`), which is taken from its
+  demand: the zone only gets what it still lacks, and a zone already covered
+  gets nothing. Rejected plans count for nothing.
 - A modification lists the resources to change; the others keep their
   quantity, `0` takes a resource out and a new resource is added. Each line
   keeps its recommended quantity, so the original recommendation and the
