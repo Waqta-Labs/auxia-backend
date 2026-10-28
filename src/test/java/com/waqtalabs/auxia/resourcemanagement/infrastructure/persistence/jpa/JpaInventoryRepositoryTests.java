@@ -69,7 +69,7 @@ class JpaInventoryRepositoryTests {
   }
 
   @Test
-  void reservationIsStoredWithItsLinesAndLaterReleased() {
+  void reservationIsStoredWithItsLinesChangedAndLaterReleased() {
     Inventory inventory = Inventory.create(organization, "Almacén Central Lima");
     ResourceId water =
         inventory.registerResource("Agua 2.5 L", ResourceCategory.WATER, UnitOfMeasure.UNIT, 0);
@@ -90,6 +90,17 @@ class JpaInventoryRepositoryTests {
     assertThat(reservation.reservedAt()).isEqualTo(NOW);
     assertThat(reserved.stockItem(water).stockLevel()).isEqualTo(new StockLevel(100, 60));
 
+    reserved.changeReservation(plan, List.of(new ReservationLine(water, 30)));
+    inventories.save(reserved);
+    clear();
+
+    Inventory changed = inventories.findByReservationPlanId(plan).orElseThrow();
+    assertThat(changed.activeReservationOf(plan).orElseThrow().lines())
+        .containsExactly(new ReservationLine(water, 30));
+    assertThat(changed.stockItem(water).stockLevel()).isEqualTo(new StockLevel(100, 30));
+    assertThat(changed.availableQuantityOf(food)).isEqualTo(40);
+
+    reserved = changed;
     reserved.releaseReservation(plan, NOW.plusHours(1));
     inventories.save(reserved);
     clear();

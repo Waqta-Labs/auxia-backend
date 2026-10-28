@@ -89,6 +89,29 @@ class ResourceManagementContextFacadeTests {
   }
 
   @Test
+  void changedReservationHoldsTheNewQuantities() {
+    facade.reserveResources(
+        organizationId, planId, List.of(new ReservationLineResource(water, 60)));
+
+    facade.changeReservation(
+        planId,
+        List.of(new ReservationLineResource(water, 20), new ReservationLineResource(food, 40)));
+
+    assertThat(facade.fetchAvailableStock(organizationId))
+        .extracting(AvailableStockResource::available)
+        .containsExactly(80, 0);
+    var beyondTheStock = List.of(new ReservationLineResource(water, 101));
+    assertThatThrownBy(() -> facade.changeReservation(planId, beyondTheStock))
+        .isInstanceOf(InsufficientStockException.class);
+
+    facade.releaseReservation(planId);
+
+    assertThat(facade.fetchAvailableStock(organizationId))
+        .extracting(AvailableStockResource::available)
+        .containsExactly(100, 40);
+  }
+
+  @Test
   void planReservesOnlyOnce() {
     var lines = List.of(new ReservationLineResource(water, 10));
     facade.reserveResources(organizationId, planId, lines);
