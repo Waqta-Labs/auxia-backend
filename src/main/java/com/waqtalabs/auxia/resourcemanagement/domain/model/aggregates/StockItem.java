@@ -72,6 +72,13 @@ public final class StockItem {
     stockLevel = new StockLevel(stockLevel.onHand(), stockLevel.reserved() - quantity);
   }
 
+  /** The delivered units leave the warehouse, and the whole reserved quantity is let go. */
+  void consume(int reservedQuantity, int deliveredQuantity) {
+    stockLevel =
+        new StockLevel(
+            stockLevel.onHand() - deliveredQuantity, stockLevel.reserved() - reservedQuantity);
+  }
+
   public int available() {
     return stockLevel.available();
   }

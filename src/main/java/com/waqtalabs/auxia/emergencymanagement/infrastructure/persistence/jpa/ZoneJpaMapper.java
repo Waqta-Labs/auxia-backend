@@ -33,7 +33,8 @@ final class ZoneJpaMapper {
             entity.disabledPeople),
         entity.damageLevel,
         entity.status,
-        urgencyScore(entity));
+        urgencyScore(entity),
+        entity.lastAidReceivedAt);
   }
 
   /** Copies the aggregate into a new or managed entity, keeping the columns it does not own. */
@@ -52,6 +53,7 @@ final class ZoneJpaMapper {
     entity.disabledPeople = impact.disabledPeople();
     entity.damageLevel = zone.damageLevel();
     entity.status = zone.status();
+    entity.lastAidReceivedAt = zone.lastAidReceivedAt().orElse(null);
     Optional<UrgencyScore> score = zone.urgencyScore();
     entity.urgencyScore = score.map(s -> BigDecimal.valueOf(s.value())).orElse(null);
     entity.urgencyLevel = score.map(UrgencyScore::level).orElse(null);
