@@ -5,6 +5,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldRepo
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.FieldReportCorrectionResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.FieldReportResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterEmergencyFieldReportRequest;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterFieldReportRequest;
@@ -40,7 +41,17 @@ public final class FieldReportResourceAssembler {
         report.reportedAt(),
         report.isPendingZoneAssignment(),
         report.isProcessed(),
-        report.structuredData().map(FieldReportResourceAssembler::toResource).orElse(null));
+        report.structuredData().map(FieldReportResourceAssembler::toResource).orElse(null),
+        report
+            .correction()
+            .map(
+                correction ->
+                    new FieldReportCorrectionResource(
+                        toResource(report.originalData().orElseThrow()),
+                        correction.correctedBy().value(),
+                        correction.correctedAt(),
+                        correction.reason()))
+            .orElse(null));
   }
 
   private static StructuredFieldDataResource toResource(StructuredFieldData data) {

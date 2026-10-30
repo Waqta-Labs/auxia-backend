@@ -1,8 +1,10 @@
 package com.waqtalabs.auxia.emergencymanagement.infrastructure.persistence.jpa;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ManualPriority;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ScoreContribution;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
@@ -34,7 +36,13 @@ final class ZoneJpaMapper {
         entity.damageLevel,
         entity.status,
         urgencyScore(entity),
-        entity.lastAidReceivedAt);
+        entity.lastAidReceivedAt,
+        entity.manualPriorityBy == null
+            ? null
+            : new ManualPriority(
+                new AuthorityId(entity.manualPriorityBy),
+                entity.manualPriorityAt,
+                entity.manualPriorityReason));
   }
 
   /** Copies the aggregate into a new or managed entity, keeping the columns it does not own. */
@@ -54,6 +62,10 @@ final class ZoneJpaMapper {
     entity.damageLevel = zone.damageLevel();
     entity.status = zone.status();
     entity.lastAidReceivedAt = zone.lastAidReceivedAt().orElse(null);
+    entity.manualPriorityBy =
+        zone.manualPriority().map(priority -> priority.setBy().value()).orElse(null);
+    entity.manualPriorityAt = zone.manualPriority().map(ManualPriority::setAt).orElse(null);
+    entity.manualPriorityReason = zone.manualPriority().map(ManualPriority::reason).orElse(null);
     Optional<UrgencyScore> score = zone.urgencyScore();
     entity.urgencyScore = score.map(s -> BigDecimal.valueOf(s.value())).orElse(null);
     entity.urgencyLevel = score.map(UrgencyScore::level).orElse(null);

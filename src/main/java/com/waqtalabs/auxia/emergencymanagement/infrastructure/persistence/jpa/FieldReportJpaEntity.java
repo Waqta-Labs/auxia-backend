@@ -48,5 +48,22 @@ class FieldReportJpaEntity {
   @Column(name = "missing_variables")
   List<String> missingVariables;
 
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "corrected_indicators")
+  ExtractedIndicatorsJson correctedIndicators;
+
+  @JdbcTypeCode(SqlTypes.JSON)
+  @Column(name = "corrected_missing_variables")
+  List<String> correctedMissingVariables;
+
+  @Column(name = "corrected_by")
+  UUID correctedBy;
+
+  @Column(name = "corrected_at")
+  LocalDateTime correctedAt;
+
+  @Column(name = "correction_reason")
+  String correctionReason;
+
   protected FieldReportJpaEntity() {}
 }

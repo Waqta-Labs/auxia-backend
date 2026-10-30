@@ -3,6 +3,7 @@ package com.waqtalabs.auxia.emergencymanagement.application.eventhandlers;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.CalculateUrgencyScoreCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.CalculateUrgencyScoreCommand;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportAssignedToZone;
+import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportCorrected;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportProcessed;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.ZonePopulationImpactUpdated;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.ZoneRegistered;
@@ -55,6 +56,13 @@ public class UrgencyScoreRecalculationEventHandler {
 
   @TransactionalEventListener(fallbackExecution = true)
   public void on(FieldReportProcessed event) {
+    if (event.zoneId() != null) {
+      recalculate(event.zoneId());
+    }
+  }
+
+  @TransactionalEventListener(fallbackExecution = true)
+  public void on(FieldReportCorrected event) {
     if (event.zoneId() != null) {
       recalculate(event.zoneId());
     }
