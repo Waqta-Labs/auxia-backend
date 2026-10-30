@@ -5,11 +5,14 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyClosedException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.InsufficientScoringDataException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.ManualPriorityReasonRequiredException;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AdministrativeLocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyType;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ManualPriority;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PriorityLevel;
@@ -22,6 +25,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ZoneTests {
@@ -184,6 +188,23 @@ class ZoneTests {
   }
 
   @Test
+  void zoneIsPrioritizedByHandWithItsJustificationUntilTheMarkIsRemoved() {
+    Zone zone = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
+    var authority = new AuthorityId(UUID.randomUUID());
+    var at = LocalDateTime.of(2026, 3, 15, 8, 0);
+
+    zone.prioritizeManually(authority, " Riesgo inminente de un nuevo huaico ", at);
+
+    assertThat(zone.isPrioritizedManually()).isTrue();
+    assertThat(zone.manualPriority())
+        .contains(new ManualPriority(authority, at, "Riesgo inminente de un nuevo huaico"));
+    zone.removeManualPriority();
+    assertThat(zone.manualPriority()).isEmpty();
+    assertThatThrownBy(() -> zone.prioritizeManually(authority, "", at))
+        .isInstanceOf(ManualPriorityReasonRequiredException.class);
+  }
+
+  @Test
   void reconstitutedZoneKeepsItsStatus() {
     Zone stored = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
 
@@ -196,6 +217,7 @@ class ZoneTests {
             stored.populationImpact(),
             stored.damageLevel(),
             ZoneStatus.PRIORITIZED,
+            null,
             null,
             null);
 

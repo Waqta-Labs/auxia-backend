@@ -3,19 +3,24 @@ package com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.CorrectionReasonRequiredException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportAlreadyAssignedException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportAlreadyProcessedException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportNotStructuredException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.ZoneOutsideEmergencyException;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AdministrativeLocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyType;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ReportCorrection;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ReportSource;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class FieldReportTests {
@@ -112,6 +117,38 @@ class FieldReportTests {
   }
 
   @Test
+  void correctedIndicatorsAreUsedAndTheOriginalOnesKept() {
+    FieldReport report = register();
+    report.markProcessed(STRUCTURED);
+    var corrected =
+        new StructuredFieldData(
+            DamageLevel.CRITICAL, null, 180, null, null, null, Set.of(), List.of());
+    var authority = new AuthorityId(UUID.randomUUID());
+
+    report.correct(corrected, authority, REPORTED_AT.plusHours(2), " Conteo en campo ");
+
+    assertThat(report.structuredData()).contains(corrected);
+    assertThat(report.originalData()).contains(STRUCTURED);
+    ReportCorrection correction = report.correction().orElseThrow();
+    assertThat(correction.correctedBy()).isEqualTo(authority);
+    assertThat(correction.correctedAt()).isEqualTo(REPORTED_AT.plusHours(2));
+    assertThat(correction.reason()).isEqualTo("Conteo en campo");
+  }
+
+  @Test
+  void onlyAStructuredReportIsCorrectedAndAlwaysWithAReason() {
+    FieldReport report = register();
+    var authority = new AuthorityId(UUID.randomUUID());
+
+    assertThatThrownBy(() -> report.correct(STRUCTURED, authority, REPORTED_AT, "Conteo"))
+        .isInstanceOf(FieldReportNotStructuredException.class);
+    report.markProcessed(STRUCTURED);
+    assertThatThrownBy(() -> report.correct(STRUCTURED, authority, REPORTED_AT, " "))
+        .isInstanceOf(CorrectionReasonRequiredException.class);
+    assertThat(report.correction()).isEmpty();
+  }
+
+  @Test
   void reconstitutedReportKeepsItsZone() {
     FieldReport stored = register();
 
@@ -123,6 +160,7 @@ class FieldReportTests {
             stored.rawText(),
             stored.source(),
             stored.reportedAt(),
+            null,
             null);
 
     assertThat(report.id()).isEqualTo(stored.id());

@@ -7,12 +7,14 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Emergency
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AdministrativeLocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyStatus;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyType;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ManualPriority;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PriorityLevel;
@@ -198,6 +200,34 @@ class JpaRepositoriesTests {
     assertThat(fieldReports.findByZoneId(zone.id()))
         .extracting(FieldReport::id)
         .containsExactly(report.id());
+  }
+
+  @Test
+  void correctionOfAReportAndManualPriorityOfAZoneAreStored() {
+    Emergency emergency = emergencies.save(registerEmergency("Huaico Chosica 2026"));
+    Zone zone = registerZone(emergency, "Sector Alto Perú");
+    var authority = new AuthorityId(UUID.randomUUID());
+    zone.prioritizeManually(authority, "Riesgo inminente", REPORTED_AT);
+    zones.save(zone);
+    FieldReport report =
+        FieldReport.register(
+            emergency.id(), "Derrumbe de viviendas", ReportSource.VOLUNTEER, REPORTED_AT);
+    var original =
+        new StructuredFieldData(
+            DamageLevel.SEVERE, null, null, null, null, null, Set.of(), List.of("peopleAffected"));
+    report.markProcessed(original);
+    var corrected =
+        new StructuredFieldData(
+            DamageLevel.CRITICAL, null, 180, null, null, null, Set.of(Need.WATER), List.of());
+    report.correct(corrected, authority, REPORTED_AT.plusHours(1), "Conteo en campo");
+    fieldReports.save(report);
+
+    FieldReport found = fieldReports.findById(report.id()).orElseThrow();
+    assertThat(found.structuredData()).contains(corrected);
+    assertThat(found.originalData()).contains(original);
+    assertThat(found.correction().orElseThrow().correctedBy()).isEqualTo(authority);
+    assertThat(zones.findById(zone.id()).orElseThrow().manualPriority())
+        .contains(new ManualPriority(authority, REPORTED_AT, "Riesgo inminente"));
   }
 
   @Test
