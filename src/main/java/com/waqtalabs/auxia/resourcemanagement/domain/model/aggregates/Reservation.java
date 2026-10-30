@@ -67,6 +67,11 @@ public final class Reservation {
     closedAt = Objects.requireNonNull(at, "at");
   }
 
+  void consume(LocalDateTime at) {
+    status = ReservationStatus.CONSUMED;
+    closedAt = Objects.requireNonNull(at, "at");
+  }
+
   public boolean isActive() {
     return status == ReservationStatus.ACTIVE;
   }

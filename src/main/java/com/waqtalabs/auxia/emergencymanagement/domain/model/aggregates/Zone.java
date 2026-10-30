@@ -11,6 +11,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Urgency
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneStatus;
+import java.time.LocalDateTime;
 import java.util.EnumSet;
 import java.util.List;
 import java.util.Objects;
@@ -29,6 +30,7 @@ public final class Zone {
   private final DamageLevel damageLevel;
   private ZoneStatus status;
   private UrgencyScore urgencyScore;
+  private LocalDateTime lastAidReceivedAt;
 
   private Zone(
       ZoneId id,
@@ -38,7 +40,8 @@ public final class Zone {
       PopulationImpact populationImpact,
       DamageLevel damageLevel,
       ZoneStatus status,
-      UrgencyScore urgencyScore) {
+      UrgencyScore urgencyScore,
+      LocalDateTime lastAidReceivedAt) {
     this.id = Objects.requireNonNull(id, "id");
     this.emergencyId = Objects.requireNonNull(emergencyId, "emergencyId");
     this.name = requireText(name);
@@ -47,6 +50,7 @@ public final class Zone {
     this.damageLevel = Objects.requireNonNull(damageLevel, "damageLevel");
     this.status = Objects.requireNonNull(status, "status");
     this.urgencyScore = urgencyScore;
+    this.lastAidReceivedAt = lastAidReceivedAt;
   }
 
   /**
@@ -68,6 +72,7 @@ public final class Zone {
         populationImpact,
         damageLevel,
         ZoneStatus.REGISTERED,
+        null,
         null);
   }
 
@@ -75,6 +80,7 @@ public final class Zone {
    * Rebuilds a zone that is already stored, without registering it again.
    *
    * @param urgencyScore {@code null} while the score has not been calculated
+   * @param lastAidReceivedAt {@code null} while no aid was delivered
    */
   public static Zone reconstitute(
       ZoneId id,
@@ -84,9 +90,18 @@ public final class Zone {
       PopulationImpact populationImpact,
       DamageLevel damageLevel,
       ZoneStatus status,
-      UrgencyScore urgencyScore) {
+      UrgencyScore urgencyScore,
+      LocalDateTime lastAidReceivedAt) {
     return new Zone(
-        id, emergencyId, name, geolocation, populationImpact, damageLevel, status, urgencyScore);
+        id,
+        emergencyId,
+        name,
+        geolocation,
+        populationImpact,
+        damageLevel,
+        status,
+        urgencyScore,
+        lastAidReceivedAt);
   }
 
   public boolean belongsTo(EmergencyId emergencyId) {
@@ -142,6 +157,18 @@ public final class Zone {
     this.populationImpact = Objects.requireNonNull(populationImpact, "populationImpact");
   }
 
+  /**
+   * A brigade delivered aid in the zone: it moves to {@code SERVED} until a new score shows that
+   * it needs more.
+   */
+  public void markServed(LocalDateTime aidReceivedAt) {
+    Objects.requireNonNull(aidReceivedAt, "aidReceivedAt");
+    if (lastAidReceivedAt == null || aidReceivedAt.isAfter(lastAidReceivedAt)) {
+      lastAidReceivedAt = aidReceivedAt;
+    }
+    status = ZoneStatus.SERVED;
+  }
+
   /** Applies a new urgency score and moves the zone to {@code PRIORITIZED}. */
   public void updateUrgencyScore(UrgencyScore urgencyScore) {
     this.urgencyScore = Objects.requireNonNull(urgencyScore, "urgencyScore");
@@ -179,6 +206,11 @@ public final class Zone {
   /** Empty until the score is calculated for the first time. */
   public Optional<UrgencyScore> urgencyScore() {
     return Optional.ofNullable(urgencyScore);
+  }
+
+  /** When the last delivery of aid in the zone happened; empty while none did. */
+  public Optional<LocalDateTime> lastAidReceivedAt() {
+    return Optional.ofNullable(lastAidReceivedAt);
   }
 
   private static DamageLevel mostSevere(DamageLevel first, DamageLevel second) {

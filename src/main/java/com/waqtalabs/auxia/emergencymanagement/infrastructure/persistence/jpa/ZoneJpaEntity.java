@@ -63,6 +63,9 @@ class ZoneJpaEntity {
   @Enumerated(EnumType.STRING)
   ZoneStatus status;
 
+  @Column(name = "last_aid_received_at")
+  LocalDateTime lastAidReceivedAt;
+
   @Column(name = "urgency_score", precision = 5, scale = 2)
   BigDecimal urgencyScore;
 

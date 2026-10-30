@@ -77,7 +77,8 @@ public final class ZoneResourceAssembler {
         zone.damageLevel(),
         zone.status(),
         score.map(UrgencyScore::value).orElse(null),
-        score.map(UrgencyScore::level).orElse(null));
+        score.map(UrgencyScore::level).orElse(null),
+        zone.lastAidReceivedAt().orElse(null));
   }
 
   public static ZoneRankingItemResource toRankingItem(ZoneRankingEntry entry) {

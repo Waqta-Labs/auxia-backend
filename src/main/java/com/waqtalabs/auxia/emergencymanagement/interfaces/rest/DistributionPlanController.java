@@ -1,11 +1,13 @@
 package com.waqtalabs.auxia.emergencymanagement.interfaces.rest;
 
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.ApproveDistributionPlanCommandHandler;
+import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.AssignDistributionPlanBrigadeCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.GenerateDistributionRecommendationCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.GenerateDistributionRecommendationCommandHandler.GeneratedRecommendation;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.ModifyDistributionPlanCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RejectDistributionPlanCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.ApproveDistributionPlanCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.commands.AssignDistributionPlanBrigadeCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.GenerateDistributionRecommendationCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RejectDistributionPlanCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetDistributionPlanByIdQuery;
@@ -19,6 +21,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Emergen
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.assemblers.DistributionPlanResourceAssembler;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.BrigadeAssignmentResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.DistributionPlanResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.DistributionRecommendationResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ModifyDistributionPlanRequest;
@@ -30,6 +33,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Optional;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -42,6 +46,7 @@ import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
+import org.springframework.web.bind.annotation.ResponseStatus;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
@@ -60,6 +65,7 @@ public class DistributionPlanController {
   private final ModifyDistributionPlanCommandHandler modifyPlan;
   private final ApproveDistributionPlanCommandHandler approvePlan;
   private final RejectDistributionPlanCommandHandler rejectPlan;
+  private final AssignDistributionPlanBrigadeCommandHandler assignBrigade;
   private final DistributionPlanQueryService planQueries;
 
   public DistributionPlanController(
@@ -67,11 +73,13 @@ public class DistributionPlanController {
       ModifyDistributionPlanCommandHandler modifyPlan,
       ApproveDistributionPlanCommandHandler approvePlan,
       RejectDistributionPlanCommandHandler rejectPlan,
+      AssignDistributionPlanBrigadeCommandHandler assignBrigade,
       DistributionPlanQueryService planQueries) {
     this.generateRecommendation = generateRecommendation;
     this.modifyPlan = modifyPlan;
     this.approvePlan = approvePlan;
     this.rejectPlan = rejectPlan;
+    this.assignBrigade = assignBrigade;
     this.planQueries = planQueries;
   }
 
@@ -217,6 +225,32 @@ public class DistributionPlanController {
             organizationOf(user),
             request.reason());
     return DistributionPlanResourceAssembler.toResource(rejectPlan.handle(command));
+  }
+
+  @PreAuthorize("hasRole('AUTHORITY')")
+  @PostMapping("/distribution-plans/{planId}/brigade-assignment")
+  @Operation(
+      summary = "Assign a brigade to an approved plan",
+      description =
+          "The brigade is assigned on approval. When every brigade was busy then, or the AI"
+              + " Service did not answer, the authority asks for one again here. The AI Service"
+              + " suggests the available brigade closest to the zone.")
+  @ApiResponse(responseCode = "201", description = "Brigade assigned")
+  @ApiResponse(responseCode = "404", description = "Not a plan of the organization")
+  @ApiResponse(
+      responseCode = "409",
+      description = "The plan is not approved, or a brigade already has it")
+  @ApiResponse(
+      responseCode = "422",
+      description = "No brigade of the organization is available with a leader")
+  @ApiResponse(responseCode = "503", description = "The AI Service is not available")
+  @ResponseStatus(HttpStatus.CREATED)
+  public BrigadeAssignmentResource assignBrigade(
+      @PathVariable UUID planId, @AuthenticationPrincipal AuthenticatedUser user) {
+    var command =
+        new AssignDistributionPlanBrigadeCommand(
+            new DistributionPlanId(planId), organizationOf(user), Optional.of(authorityOf(user)));
+    return new BrigadeAssignmentResource(planId, assignBrigade.handle(command).value());
   }
 
   private static AuthorityId authorityOf(AuthenticatedUser user) {

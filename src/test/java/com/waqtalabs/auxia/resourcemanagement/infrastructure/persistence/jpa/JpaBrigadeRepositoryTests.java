@@ -94,6 +94,20 @@ class JpaBrigadeRepositoryTests {
   }
 
   @Test
+  void brigadeIsFoundByThePlanItWasAssigned() {
+    Brigade brigade = Brigade.create(organization, "Brigada Chosica 1", CHOSICA);
+    brigade.addMember(StaffMember.register("Rosa Quispe", StaffRole.LEADER, null));
+    var plan = new DistributionPlanId(UUID.randomUUID());
+    brigade.assignTo(plan, new ZoneId(UUID.randomUUID()), NOW);
+    brigade.completeAssignment(plan, NOW.plusHours(4));
+    brigades.save(brigade);
+    clear();
+
+    assertThat(brigades.findByAssignedPlan(plan)).map(Brigade::id).contains(brigade.id());
+    assertThat(brigades.findByAssignedPlan(new DistributionPlanId(UUID.randomUUID()))).isEmpty();
+  }
+
+  @Test
   void brigadesOfAnOrganizationAreOrderedByName() {
     brigades.save(Brigade.create(organization, "Brigada Pedregal", CHOSICA));
     brigades.save(Brigade.create(organization, "Brigada Alto Perú", CHOSICA));

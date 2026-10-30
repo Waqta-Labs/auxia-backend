@@ -5,6 +5,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ScoreCo
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyIndicators;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
 import com.waqtalabs.auxia.emergencymanagement.domain.services.UrgencyScoringService;
+import com.waqtalabs.auxia.shared.infrastructure.aiservice.AiServiceCalls;
 import java.time.Clock;
 import java.time.LocalDateTime;
 import java.util.List;

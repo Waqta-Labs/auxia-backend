@@ -160,6 +160,37 @@ public final class Inventory {
     reservation.release(releasedAt);
   }
 
+  /**
+   * Takes out of the warehouse what the delivery of a plan really gave, which can be less than
+   * reserved, and makes the rest of its reservation available again.
+   *
+   * @param delivered quantities delivered of resources of the reservation
+   * @throws ReservationNotFoundException if the plan has no active reservation
+   * @throws IllegalArgumentException if a resource was not reserved or was delivered beyond it
+   */
+  public void consumeReservation(
+      DistributionPlanId planId, List<ReservationLine> delivered, LocalDateTime consumedAt) {
+    Reservation reservation =
+        activeReservationOf(planId).orElseThrow(() -> new ReservationNotFoundException(planId));
+    Map<ResourceId, Integer> reserved = new HashMap<>();
+    reservation.lines().forEach(line -> reserved.put(line.resourceId(), line.quantity()));
+    Map<ResourceId, Integer> given = new HashMap<>();
+    for (ReservationLine line : delivered) {
+      if (line.quantity() > reserved.getOrDefault(line.resourceId(), 0)) {
+        throw new IllegalArgumentException(
+            "Resource " + line.resourceId().value() + " was delivered beyond its reservation");
+      }
+      given.merge(line.resourceId(), line.quantity(), Integer::sum);
+    }
+    reservation
+        .lines()
+        .forEach(
+            line ->
+                stockItem(line.resourceId())
+                    .consume(line.quantity(), given.getOrDefault(line.resourceId(), 0)));
+    reservation.consume(consumedAt);
+  }
+
   public int availableQuantityOf(ResourceId resourceId) {
     return stockItem(resourceId).available();
   }

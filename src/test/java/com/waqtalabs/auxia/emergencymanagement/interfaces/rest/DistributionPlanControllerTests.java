@@ -255,6 +255,71 @@ class DistributionPlanControllerTests {
         .andExpect(status().isUnprocessableContent());
   }
 
+  @Test
+  void approvedPlanGetsAFreeBrigadeWithALeader() throws Exception {
+    String brigadeId = brigade("Brigada Chosica 1");
+    String planId = recommendedPlan();
+
+    approve(planId, organization.authority()).andExpect(status().isOk());
+
+    mockMvc
+        .perform(get("/api/v1/brigades/" + brigadeId).with(organization.administrator()))
+        .andExpect(jsonPath("$.status").value("ASSIGNED"))
+        .andExpect(jsonPath("$.currentAssignment.distributionPlanId").value(planId))
+        .andExpect(jsonPath("$.currentAssignment.zoneId").value(altoPeru));
+    assignBrigade(planId, organization.authority()).andExpect(status().isConflict());
+  }
+
+  @Test
+  void planApprovedWhileEveryBrigadeWasBusyAsksForOneLater() throws Exception {
+    String planId = recommendedPlan();
+    approve(planId, organization.authority()).andExpect(status().isOk());
+    assignBrigade(planId, organization.authority())
+        .andExpect(status().isUnprocessableContent());
+
+    String brigadeId = brigade("Brigada Chosica 1");
+
+    assignBrigade(planId, organization.auditor()).andExpect(status().isForbidden());
+    assignBrigade(planId, organization.authority())
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.distributionPlanId").value(planId))
+        .andExpect(jsonPath("$.brigadeId").value(brigadeId));
+  }
+
+  @Test
+  void onlyAnApprovedPlanGetsABrigade() throws Exception {
+    brigade("Brigada Chosica 1");
+    String planId = recommendedPlan();
+
+    assignBrigade(planId, organization.authority()).andExpect(status().isConflict());
+    var other = SignedInOrganization.register(mockMvc);
+    assignBrigade(planId, other.authority()).andExpect(status().isNotFound());
+  }
+
+  private ResultActions assignBrigade(String planId, RequestPostProcessor user) throws Exception {
+    return mockMvc.perform(
+        post("/api/v1/distribution-plans/" + planId + "/brigade-assignment").with(user));
+  }
+
+  /** An available brigade of the organization, with a leader, based in Chosica. */
+  private String brigade(String name) throws Exception {
+    String brigadeId =
+        idOf(
+            send(
+                post("/api/v1/brigades"),
+                organization.administrator(),
+                """
+                {"name": "%s", "baseLocation": {"latitude": -11.9436, "longitude": -76.7078}}
+                """
+                    .formatted(name)));
+    send(
+            post("/api/v1/brigades/" + brigadeId + "/members"),
+            organization.administrator(),
+            "{\"fullName\": \"Rosa Quispe\", \"role\": \"LEADER\"}")
+        .andExpect(status().isCreated());
+    return brigadeId;
+  }
+
   private String recommendedPlan() throws Exception {
     return JsonPath.read(
         recommend(organization.authority())

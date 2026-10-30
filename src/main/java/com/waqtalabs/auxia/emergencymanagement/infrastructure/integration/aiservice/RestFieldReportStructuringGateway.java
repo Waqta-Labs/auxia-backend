@@ -2,6 +2,7 @@ package com.waqtalabs.auxia.emergencymanagement.infrastructure.integration.aiser
 
 import com.waqtalabs.auxia.emergencymanagement.application.ports.FieldReportStructuringService;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
+import com.waqtalabs.auxia.shared.infrastructure.aiservice.AiServiceCalls;
 import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Component;

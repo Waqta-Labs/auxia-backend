@@ -12,7 +12,9 @@ AuxIA Backend API: Spring Boot (Java 21) modular monolith exposing RESTful APIs 
 | Database | PostgreSQL 18 on Neon, one schema per bounded context |
 | Migrations | Flyway (`src/main/resources/db/migration`) |
 | API docs | springdoc-openapi 3.2.0 (Swagger UI) |
-| Tests | JUnit 6, Testcontainers (PostgreSQL 18), Cucumber 8 |
+| Evidence storage | Azure Blob Storage (`azure-storage-blob` 12.36.0, over the JDK HTTP client) |
+| Blockchain | Web3j 6.0.0, `DeliveryRegistry` on Sepolia ([auxia-smart-contracts](https://github.com/Waqta-Labs/auxia-smart-contracts)) |
+| Tests | JUnit 6, Testcontainers (PostgreSQL 18, Azurite, Anvil), Cucumber 8 |
 
 ## Structure
 
@@ -36,20 +38,41 @@ src/main/java/com/waqtalabs/auxia/
 │   │   └── services/                # ZoneIdentificationService, UrgencyScoringService,
 │   │                                # DistributionOptimizationService
 │   ├── application/                 # commands, queries, handlers, event handlers, ports
-│   ├── interfaces/rest/             # controllers, resources and assemblers
+│   ├── interfaces/
+│   │   ├── rest/                    # controllers, resources and assemblers
+│   │   ├── acl/                     # EmergencyManagementContextFacade for other contexts
+│   │   └── events/                  # consumer of DeliveryConfirmed (plan and zone)
 │   └── infrastructure/
 │       ├── persistence/jpa/
 │       └── integration/
 │           ├── aiservice/           # Anti-Corruption Layer to auxia-ai-service
-│           ├── resourcemanagement/  # inventory and reservations, through its facade
+│           ├── resourcemanagement/  # inventory, reservations and brigades, through its facade
 │           └── identityaccess/      # current role of a user, through its facade
 ├── resourcemanagement/
-│   ├── domain/                      # Inventory and Brigade with their entities, exceptions
+│   ├── domain/                      # Inventory and Brigade with their entities, exceptions,
+│   │                                # StaffAssignmentService
 │   ├── application/                 # commands, handlers, InventoryQueryService, BrigadeQueryService
 │   ├── interfaces/
 │   │   ├── rest/                    # InventoryController, BrigadeController
-│   │   └── acl/                     # ResourceManagementContextFacade for other contexts
-│   └── infrastructure/persistence/jpa/
+│   │   ├── acl/                     # ResourceManagementContextFacade and public events
+│   │   └── events/                  # consumer of DeliveryConfirmed (stock and brigade)
+│   └── infrastructure/
+│       ├── persistence/jpa/
+│       └── integration/aiservice/   # brigade suggestion of auxia-ai-service
+├── traceability/
+│   ├── domain/                      # Delivery with DeliveryItem and Evidence, IntegrityRecord,
+│   │                                # CanonicalDeliveryRecord, HashingService
+│   ├── application/                 # register, anchor, verify; anchoring retry scheduler; ports
+│   ├── interfaces/
+│   │   ├── rest/                    # DeliveryController, DeliveryVerificationController
+│   │   ├── acl/                     # public DeliveryConfirmed event
+│   │   └── events/                  # consumer of BrigadeAssigned
+│   └── infrastructure/
+│       ├── persistence/jpa/
+│       ├── hashing/                 # SHA-256
+│       ├── storage/                 # Azure Blob Storage
+│       ├── blockchain/              # DeliveryRegistry through Web3j
+│       └── integration/             # Identity Access and Emergency Management facades
 ├── identityaccess/
 │   ├── domain/                      # Organization and UserAccount, PasswordHashingService
 │   ├── application/                 # sign-in, organizations, users, CheckAccessQueryHandler
@@ -63,6 +86,7 @@ src/main/java/com/waqtalabs/auxia/
     ├── domain/                      # error categories (404, 409, 422) and DomainEvent
     ├── application/                 # DomainEventPublisher, ExternalServiceUnavailable (503)
     ├── infrastructure/
+    │   ├── aiservice/               # HTTP client of auxia-ai-service, shared by the gateways
     │   ├── events/                  # domain events through Spring, in the same process
     │   ├── documentation/openapi/   # OpenAPI metadata for Swagger UI
     │   ├── i18n/                    # Accept-Language resolution (en_US, es_419)
@@ -73,8 +97,8 @@ src/main/java/com/waqtalabs/auxia/
 
 ## Configuration
 
-The database, the AI Service and the security are configured with environment
-variables:
+The database, the AI Service, the security, the evidence storage and the
+blockchain are configured with environment variables:
 
 | Variable | Description |
 |---|---|
@@ -85,10 +109,32 @@ variables:
 | `AI_SERVICE_API_KEY` | Shared secret sent in `X-API-Key`. It must be the same `AI_SERVICE_API_KEY` of the AI Service. Required |
 | `AUTH_JWT_SECRET` | Base64 key that signs the access tokens, at least 32 bytes, e.g. `openssl rand -base64 32`. Required |
 | `PLATFORM_ADMIN_KEY` | Secret of the platform operator, sent in `X-Platform-Key` to register and suspend organizations. Required |
+| `AZURE_STORAGE_CONNECTION_STRING` | Connection string of the Azure Storage account of the evidence files (portal: Storage account → Access keys). Locally, the one of Azurite (below). Required |
+| `AZURE_STORAGE_CONTAINER` | Private container of the evidence files; created if it does not exist. Default `evidences` |
+| `BLOCKCHAIN_RPC_URL` | JSON-RPC URL of the network, e.g. the Sepolia URL of Alchemy. Required |
+| `BLOCKCHAIN_PRIVATE_KEY` | Private key of the wallet that owns `DeliveryRegistry`: only it can register deliveries. It pays the gas of each anchoring (SepoliaETH). Required |
+| `BLOCKCHAIN_CONTRACT_ADDRESS` | Address of `DeliveryRegistry`. Default the Sepolia deployment, `0xe678347E182cbf00031401C97284AaB1C6b8148c` |
+| `BLOCKCHAIN_CHAIN_ID` | Network of the transactions. Default `11155111` (Sepolia) |
 
 For local development, copy `.env.example` to `.env` and fill in the values.
 The application imports `.env` from the working directory when it exists.
 `.env` is ignored by git and must never be committed.
+
+Without an Azure account, run Azurite, the storage emulator of Microsoft. It
+skips the API version check because the SDK can be newer than the emulator:
+
+```bash
+docker run -d --name azurite -p 10000:10000 mcr.microsoft.com/azure-storage/azurite \
+  azurite-blob --blobHost 0.0.0.0 --skipApiVersionCheck --loose
+```
+
+and use its well-known development account:
+
+```text
+AZURE_STORAGE_CONNECTION_STRING=DefaultEndpointsProtocol=http;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;BlobEndpoint=http://127.0.0.1:10000/devstoreaccount1;
+```
+
+Switching to Azure Blob Storage only changes that variable.
 
 ### Database migrations
 
@@ -102,6 +148,7 @@ application starts.
 | V2 | `zones.population`: people living in the zone, optional. The urgency score needs it. |
 | V3 | `field_reports.emergency_id`; `zone_id` becomes optional, so a report can be pending zone assignment (US-01). |
 | V4 | `distribution_plans`: organization, coverage and the last modification (who, when, why); `distribution_items.recommended_quantity`, so the original recommendation survives a modification (US-13, US-14). |
+| V5 | `deliveries.organization_id`; a `REGISTERED` delivery keeps its `transaction_hash` from the moment it is sent, while its anchoring is `PENDING`. |
 
 Neon already had the schema of V1 when Flyway was added, so on Neon V1 is
 recorded as the baseline (`baseline-on-migrate`) and only V2 onwards run. An
@@ -143,14 +190,18 @@ both can be processed later (see [Urgency score](#urgency-score)).
 ./mvnw verify
 ```
 
-Docker must be running: the tests that start the application use a disposable
-PostgreSQL 18 container (Testcontainers) and run every migration on it. Tests
-never use Neon. Surefire points `DB_URL` to an unreachable address, so a test
+Docker must be running: the tests that start the application use disposable
+PostgreSQL 18 and Azurite containers (Testcontainers) and run every migration
+on them. Tests never use Neon nor a real storage account. Surefire points `DB_URL` to an unreachable address, so a test
 that forgets the container fails instead of reaching Neon. It does the same
 with `AI_SERVICE_URL`: tests never call the AI Service. The gateways are tested
 against the responses of its contract with `MockRestServiceServer`, and the
 tests that need structured reports or scores use `FakeAiService`, a
-predictable double imported with `FakeAiServiceConfiguration`.
+predictable double imported with `FakeAiServiceConfiguration`. Nor a
+blockchain: `BLOCKCHAIN_RPC_URL` is unreachable too, the delivery tests use
+`FakeBlockchainLedger` (`FakeBlockchainConfiguration`), and the anchoring runs in
+the request thread. The Web3j adapter is tested against the real
+`DeliveryRegistry` bytecode, deployed on a local Anvil chain in a container.
 
 | Level | Where |
 |---|---|
@@ -163,8 +214,10 @@ The endpoints need a signed-in user. Most REST tests and scenarios run as an
 `AUTHORITY` (`DefaultAuthorityUserConfiguration`) or pick another user with
 `TestUsers`. The Identity Access tests and the US-21 and US-22 scenarios sign in
 through the API and send the real token instead. So do the distribution plan
-tests and the US-11 to US-14 scenarios, with `SignedInOrganization`, because each
-decision asks Identity Access for the current role of a user who must exist.
+and delivery tests and the US-11 to US-18 scenarios, with `SignedInOrganization`,
+because each decision asks Identity Access for the current role of a user who
+must exist. `ApprovedPlan` prepares, through the API, an approved plan with its
+brigade and its delivery open.
 
 ## Endpoints
 
@@ -212,6 +265,7 @@ authority assigns it (US-01, scenario 2).
 | `PATCH /api/v1/distribution-plans/{id}/items` | Change quantities of a proposed plan, with a reason (US-13, US-14). |
 | `POST /api/v1/distribution-plans/{id}/approve` | Approve a proposed plan; no body, the authority comes from the token (US-12, TS-C01). |
 | `POST /api/v1/distribution-plans/{id}/reject` | Reject a proposed plan with a reason (US-14). |
+| `POST /api/v1/distribution-plans/{id}/brigade-assignment` | Assign a brigade to an approved plan that has none, because every brigade was busy at approval time. |
 
 - A recommendation covers the whole emergency: the AI Service splits the
   available stock of the organization of the authority among every zone with an
@@ -241,6 +295,15 @@ authority assigns it (US-01, scenario 2).
 - Before each decision the use case asks Identity Access whether the user is
   still an active authority (QAD-02); if not, 403. Plans belong to the
   organization of the user; a plan of another organization answers 404.
+- Approving a plan assigns it a brigade right after the commit: the AI Service
+  suggests the available brigade with a leader closest to the zone; a zone
+  without coordinates gets the first one by name. If none is free, or the AI
+  Service does not answer, the plan stays approved without a brigade and
+  `POST .../brigade-assignment` asks again (422 while none is free, 409 if the
+  plan already has one). The assignment opens the delivery of the plan.
+- When its delivery is registered, the plan becomes `EXECUTED` and its zone
+  `SERVED`, with `lastAidReceivedAt`. An executed plan keeps counting in
+  `alreadyAllocated`.
 
 ### Inventory (Resource Management)
 
@@ -264,9 +327,12 @@ authority assigns it (US-01, scenario 2).
 - The organization is the one of the signed-in user. An inventory of another
   organization answers 404.
 - Other bounded contexts use `ResourceManagementContextFacade` in the same
-  process: available stock of an organization, and reserving, changing or
-  releasing the resources of a distribution plan. A plan has one reservation;
-  each operation applies every line or none.
+  process: available stock of an organization, reserving, changing or releasing
+  the resources of a distribution plan, and assigning it a brigade. A plan has
+  one reservation; each operation applies every line or none.
+- A registered delivery consumes the reservation of its plan: what was
+  delivered leaves the warehouse (`onHand`) and the rest becomes available
+  again.
 
 ### Brigades (Resource Management)
 
@@ -282,11 +348,51 @@ authority assigns it (US-01, scenario 2).
 - Brigade names are unique per organization (409). A brigade of another
   organization answers 404.
 - A brigade is assigned to a distribution plan only while it is available and
-  has a `LEADER`, and has one assignment in progress at most. The domain
-  already enforces these rules; the assignment itself arrives with the
-  distribution plans and the brigade suggestion of the AI Service.
+  has a `LEADER`, and has one assignment in progress at most. It becomes
+  `ASSIGNED` when a plan is approved and `AVAILABLE` again when the delivery of
+  the plan is registered.
 - While a brigade is assigned, its availability cannot change (409) and its last
   leader cannot be removed (422). `ASSIGNED` is never set by hand (422).
+
+### Deliveries (Traceability)
+
+| Method and path | Description |
+|---|---|
+| `GET /api/v1/deliveries?zoneId=` | Deliveries of a zone, from the most recent. |
+| `GET /api/v1/deliveries/{id}` | One delivery with its items, evidence (by hash) and anchoring. |
+| `POST /api/v1/deliveries/{id}/registration` | Register the delivery with its evidence (US-15, TS-05). `multipart/form-data`: a `delivery` part in JSON and one `evidences` part per file. |
+| `GET /api/v1/deliveries/{id}/verify` | Public: compare the hash of the delivery as it is now with the one in the blockchain (US-17). |
+
+- A delivery opens (`INITIATED`) when a brigade is assigned to an approved
+  plan; each plan has one. A `FIELD_BRIGADE` member or an `AUTHORITY` of the
+  organization registers it once; Identity Access confirms the role when the
+  command runs.
+- The registration needs at least one evidence file: without the `evidences`
+  part it answers 400 and computes no hash (TS-05); an empty file answers 422.
+  A file is a JPEG, PNG, WebP or HEIC photo or a PDF (422 otherwise). Each file
+  is stored in Azure Blob Storage named by its SHA-256, which the delivery
+  keeps. The quantities can be less than planned, never more nor other
+  resources (422).
+- The registration computes the SHA-256 of a canonical record with a closed
+  list of fields: delivery, plan and zone identifiers, delivered quantities,
+  hashes of the files and the delivery date. Names, documents and any other
+  personal data have no field in the request nor in the record, so they never
+  reach the blockchain (TS-C02, US-18).
+- The field app may send a registration twice after losing the signal
+  (TS-C06): a delivery already registered is returned as it is, with 200.
+- The hash is anchored with `registerDelivery(deliveryId, hash)` right after the
+  response, in the background: the 201 carries the hash, and the transaction
+  shows up in `GET /deliveries/{id}` once it is sent. The delivery becomes
+  `CERTIFIED` when the transaction is confirmed (US-16). If the network fails
+  or rejects it, the anchoring is `FAILED`, and it is retried every 5 minutes,
+  up to 10 transactions. The transaction is kept from the moment it is sent, so
+  a retry checks it instead of sending the hash again.
+- The verification needs no sign-in: the identifier of the delivery is its
+  public code. It computes the hash again from the quantities in the database
+  and the files read again from the storage, and compares it with
+  `getDeliveryHash`. A changed quantity or a replaced photo gives
+  `verified: false`. A code of no registered delivery answers 404, and 503 if
+  the blockchain does not answer.
 
 ### Identity Access
 
@@ -320,8 +426,8 @@ authority assigns it (US-01, scenario 2).
 
 | Role | Can change |
 |---|---|
-| `AUTHORITY` | Emergencies, zones, population impact, scores, field reports and their zone, distribution plans |
-| `FIELD_BRIGADE` | Field reports (register and structure) |
+| `AUTHORITY` | Emergencies, zones, population impact, scores, field reports and their zone, distribution plans and their brigade, deliveries |
+| `FIELD_BRIGADE` | Field reports (register and structure), deliveries |
 | `ORGANIZATION_ADMIN` | Inventory, brigades and the users of the organization |
 | `AUDITOR` | Nothing: reads only |
 
