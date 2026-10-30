@@ -149,6 +149,7 @@ application starts.
 | V3 | `field_reports.emergency_id`; `zone_id` becomes optional, so a report can be pending zone assignment (US-01). |
 | V4 | `distribution_plans`: organization, coverage and the last modification (who, when, why); `distribution_items.recommended_quantity`, so the original recommendation survives a modification (US-13, US-14). |
 | V5 | `deliveries.organization_id`; a `REGISTERED` delivery keeps its `transaction_hash` from the moment it is sent, while its anchoring is `PENDING`. |
+| V8 | `stock_alerts`: low stock alerts, one open at most per resource (US-10). |
 
 Neon already had the schema of V1 when Flyway was added, so on Neon V1 is
 recorded as the baseline (`baseline-on-migrate`) and only V2 onwards run. An
@@ -315,6 +316,7 @@ authority assigns it (US-01, scenario 2).
 | `POST /api/v1/inventories/{id}/resources` | Register a resource, without stock. |
 | `POST /api/v1/inventories/{id}/resources/{resourceId}/restock` | Register the entry of a quantity received (US-08). |
 | `PATCH /api/v1/inventories/{id}/resources/{resourceId}/adjustment` | Add or remove a quantity with a reason. |
+| `GET /api/v1/inventories/{id}/alerts?status=` | Low stock alerts, the most recent first; `OPEN` or `RESOLVED` (US-10). |
 
 - `available = onHand - reserved`: what is reserved for a distribution plan
   cannot be distributed again (US-09, scenario 2). `belowMinimum` tells when the
@@ -324,6 +326,12 @@ authority assigns it (US-01, scenario 2).
   adjustment of 0, or a negative restock, answers 400 (US-08, scenario 2).
 - The reason of each adjustment is written to the log until the audit trail
   exists (QAD-03).
+- Every change of stock (a new resource, a restock, an adjustment, a
+  reservation and its change, release or consumption) evaluates the alerts
+  after its commit: a resource whose available quantity falls below its minimum
+  stock gets an `OPEN` alert, written to the log, and the alert is `RESOLVED`
+  when the resource is restocked above the minimum. A new fall raises a new
+  alert.
 - The organization is the one of the signed-in user. An inventory of another
   organization answers 404.
 - Other bounded contexts use `ResourceManagementContextFacade` in the same
