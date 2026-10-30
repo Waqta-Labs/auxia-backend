@@ -55,6 +55,17 @@ class DatabaseBaselineTests {
     assertThat(emergencyId).isEqualTo(EXISTING_EMERGENCY_ID);
   }
 
+  @Test
+  void existingEmergenciesAndZonesAreShownToThePublic() {
+    String stage =
+        jdbcTemplate.queryForObject(
+            "SELECT stage FROM citizen_transparency.zone_public_statuses WHERE emergency_id = ?",
+            String.class,
+            EXISTING_EMERGENCY_ID);
+
+    assertThat(stage).isEqualTo("REGISTERED");
+  }
+
   @TestConfiguration(proxyBeanMethods = false)
   static class ExistingSchemaConfiguration {
 
