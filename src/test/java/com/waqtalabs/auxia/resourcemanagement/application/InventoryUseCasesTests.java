@@ -33,10 +33,12 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Reservat
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ResourceCategory;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.StockLevel;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.UnitOfMeasure;
+import com.waqtalabs.auxia.shared.domain.events.DomainEvent;
 import java.time.Clock;
 import java.time.Instant;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
@@ -47,17 +49,19 @@ class InventoryUseCasesTests {
       Clock.fixed(Instant.parse("2026-03-14T14:30:00Z"), ZoneOffset.ofHours(-5));
 
   private final InMemoryInventoryRepository inventories = new InMemoryInventoryRepository();
+  private final List<DomainEvent> events = new ArrayList<>();
   private final CreateInventoryCommandHandler create =
       new CreateInventoryCommandHandler(inventories);
   private final RegisterResourceCommandHandler registerResource =
-      new RegisterResourceCommandHandler(inventories);
+      new RegisterResourceCommandHandler(inventories, events::add);
   private final RestockResourceCommandHandler restock =
-      new RestockResourceCommandHandler(inventories);
-  private final AdjustStockCommandHandler adjust = new AdjustStockCommandHandler(inventories);
+      new RestockResourceCommandHandler(inventories, events::add);
+  private final AdjustStockCommandHandler adjust =
+      new AdjustStockCommandHandler(inventories, events::add);
   private final ReserveResourcesCommandHandler reserve =
-      new ReserveResourcesCommandHandler(inventories, CLOCK);
+      new ReserveResourcesCommandHandler(inventories, events::add, CLOCK);
   private final ReleaseReservationCommandHandler release =
-      new ReleaseReservationCommandHandler(inventories, CLOCK);
+      new ReleaseReservationCommandHandler(inventories, events::add, CLOCK);
   private final InventoryQueryService queries = new InventoryQueryService(inventories);
 
   private final OrganizationId organization = new OrganizationId(UUID.randomUUID());
