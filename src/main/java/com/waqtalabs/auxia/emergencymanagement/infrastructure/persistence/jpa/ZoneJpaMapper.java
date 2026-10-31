@@ -42,7 +42,10 @@ final class ZoneJpaMapper {
             : new ManualPriority(
                 new AuthorityId(entity.manualPriorityBy),
                 entity.manualPriorityAt,
-                entity.manualPriorityReason));
+                entity.manualPriorityReason),
+        entity.responsibleAuthorityId == null
+            ? null
+            : new AuthorityId(entity.responsibleAuthorityId));
   }
 
   /** Copies the aggregate into a new or managed entity, keeping the columns it does not own. */
@@ -66,6 +69,8 @@ final class ZoneJpaMapper {
         zone.manualPriority().map(priority -> priority.setBy().value()).orElse(null);
     entity.manualPriorityAt = zone.manualPriority().map(ManualPriority::setAt).orElse(null);
     entity.manualPriorityReason = zone.manualPriority().map(ManualPriority::reason).orElse(null);
+    entity.responsibleAuthorityId =
+        zone.responsibleAuthority().map(AuthorityId::value).orElse(null);
     Optional<UrgencyScore> score = zone.urgencyScore();
     entity.urgencyScore = score.map(s -> BigDecimal.valueOf(s.value())).orElse(null);
     entity.urgencyLevel = score.map(UrgencyScore::level).orElse(null);

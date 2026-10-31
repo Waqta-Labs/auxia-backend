@@ -1,6 +1,7 @@
 package com.waqtalabs.auxia.emergencymanagement.domain.repositories;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import java.util.List;
@@ -14,4 +15,7 @@ public interface ZoneRepository {
 
   /** Zones of the emergency, from the most to the least urgent. */
   List<Zone> findByEmergencyId(EmergencyId emergencyId);
+
+  /** Zones the authority is responsible for, of any emergency, in registration order. */
+  List<Zone> findByResponsibleAuthority(AuthorityId authority);
 }

@@ -8,8 +8,11 @@ import com.waqtalabs.auxia.emergencymanagement.application.commands.CalculateUrg
 import com.waqtalabs.auxia.emergencymanagement.application.commands.PrioritizeZoneManuallyCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RemoveZoneManualPriorityCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneByIdQuery;
+import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneHistoryQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneRankingQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneReportQuery;
+import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZonesInChargeQuery;
+import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneHistoryQueryService;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneQueryService;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneReportQueryService;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
@@ -21,6 +24,7 @@ import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.assemblers.ZoneRe
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ManualPriorityRequest;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.PopulationImpactResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterZoneRequest;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneDecisionResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneRankingItemResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneScoreResource;
@@ -64,6 +68,7 @@ public class ZoneController {
   private final ZoneQueryService zoneQueries;
   private final ZoneReportQueryService zoneReports;
   private final ZoneManualPriorityCommandHandler manualPriority;
+  private final ZoneHistoryQueryService zoneHistory;
 
   public ZoneController(
       RegisterZoneCommandHandler registerZone,
@@ -71,13 +76,15 @@ public class ZoneController {
       CalculateUrgencyScoreCommandHandler calculateUrgencyScore,
       ZoneQueryService zoneQueries,
       ZoneReportQueryService zoneReports,
-      ZoneManualPriorityCommandHandler manualPriority) {
+      ZoneManualPriorityCommandHandler manualPriority,
+      ZoneHistoryQueryService zoneHistory) {
     this.registerZone = registerZone;
     this.updatePopulationImpact = updatePopulationImpact;
     this.calculateUrgencyScore = calculateUrgencyScore;
     this.zoneQueries = zoneQueries;
     this.zoneReports = zoneReports;
     this.manualPriority = manualPriority;
+    this.zoneHistory = zoneHistory;
   }
 
   @PreAuthorize("hasRole('AUTHORITY')")
@@ -119,16 +126,21 @@ public class ZoneController {
   @Operation(
       summary = "Register a zone of an emergency",
       description =
-          "It starts REGISTERED. With its population, the urgency score is calculated right away"
-              + " and the response already includes it, unless the AI Service did not answer.")
+          "It starts REGISTERED, with the signed-in authority as its responsible. With its"
+              + " population, the urgency score is calculated right away and the response already"
+              + " includes it, unless the AI Service did not answer.")
   @ApiResponse(responseCode = "201", description = "Zone registered")
   @ApiResponse(responseCode = "400", description = "Invalid request")
   @ApiResponse(responseCode = "404", description = "The emergency does not exist")
   @ApiResponse(responseCode = "409", description = "The emergency is closed")
   @ApiResponse(responseCode = "422", description = "Inconsistent population impact")
   public ResponseEntity<ZoneResource> register(
-      @PathVariable UUID emergencyId, @Valid @RequestBody RegisterZoneRequest request) {
-    Zone zone = registerZone.handle(ZoneResourceAssembler.toCommand(emergencyId, request));
+      @PathVariable UUID emergencyId,
+      @Valid @RequestBody RegisterZoneRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var command =
+        ZoneResourceAssembler.toCommand(emergencyId, request, new AuthorityId(user.userId()));
+    Zone zone = registerZone.handle(command);
     Zone current = zoneQueries.handle(new GetZoneByIdQuery(zone.id()));
     return ResponseEntity.created(URI.create("/api/v1/zones/" + zone.id().value()))
         .body(ZoneResourceAssembler.toResource(current));
@@ -160,6 +172,36 @@ public class ZoneController {
           Need need) {
     var query = new GetZoneRankingQuery(new EmergencyId(emergencyId), minScore, maxScore, need);
     return zoneQueries.handle(query).stream().map(ZoneResourceAssembler::toRankingItem).toList();
+  }
+
+  @PreAuthorize("hasRole('AUTHORITY')")
+  @GetMapping("/zones/in-charge")
+  @Operation(
+      summary = "List the zones in charge of the signed-in authority",
+      description =
+          "Zones of active emergencies it registered or received at a shift change, with their"
+              + " last status (US-23). In registration order.")
+  @ApiResponse(responseCode = "200", description = "Zones in charge")
+  public List<ZoneResource> findInCharge(@AuthenticationPrincipal AuthenticatedUser user) {
+    return zoneQueries.handle(new GetZonesInChargeQuery(new AuthorityId(user.userId()))).stream()
+        .map(ZoneResourceAssembler::toResource)
+        .toList();
+  }
+
+  @GetMapping("/zones/{zoneId}/history")
+  @Operation(
+      summary = "Get the history of decisions of a zone",
+      description =
+          "From the oldest to the most recent, each with the authority who took it and its"
+              + " reason (US-20): registration, plan modifications, approvals and rejections,"
+              + " manual priority, report corrections and shift changes. It is the same for every"
+              + " authority, so the next responsible sees the decisions of the previous shift.")
+  @ApiResponse(responseCode = "200", description = "History of the zone")
+  @ApiResponse(responseCode = "404", description = "The zone does not exist")
+  public List<ZoneDecisionResource> findHistory(@PathVariable UUID zoneId) {
+    return zoneHistory.handle(new GetZoneHistoryQuery(new ZoneId(zoneId))).stream()
+        .map(ZoneResourceAssembler::toResource)
+        .toList();
   }
 
   @GetMapping("/zones/{zoneId}")

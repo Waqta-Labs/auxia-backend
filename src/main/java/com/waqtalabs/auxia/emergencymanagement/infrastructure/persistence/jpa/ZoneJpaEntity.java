@@ -75,6 +75,9 @@ class ZoneJpaEntity {
   @Column(name = "manual_priority_reason")
   String manualPriorityReason;
 
+  @Column(name = "responsible_authority_id")
+  UUID responsibleAuthorityId;
+
   @Column(name = "urgency_score", precision = 5, scale = 2)
   BigDecimal urgencyScore;
 

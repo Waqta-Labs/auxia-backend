@@ -161,6 +161,7 @@ application starts.
 | V6 | Projects once, into `citizen_transparency`, the emergencies and zones that existed before the public view, with the stage of their latest plan and delivery. |
 | V7 | `field_reports`: the indicators corrected by an authority, next to those of the NLP, with who, when and why (US-03). `zones`: the manual priority with who, when and why (US-07). |
 | V8 | `stock_alerts`: low stock alerts, one open at most per resource (US-10). |
+| V9 | `zones.responsible_authority_id`; `zone_decisions`, the history of decisions of each zone, with the decisions the data already kept (US-20); `shift_handovers` and their zones (US-23). |
 
 Neon already had the schema of V1 when Flyway was added, so on Neon V1 is
 recorded as the baseline (`baseline-on-migrate`) and only V2 onwards run. An
@@ -246,7 +247,7 @@ any signed-in user; changes need a role (see [Roles](#roles)).
 | `GET /api/v1/emergencies/{id}` | One emergency. |
 | `PATCH /api/v1/emergencies/{id}/close` | Close an emergency. It no longer accepts zones. |
 | `GET /api/v1/emergencies/{id}/sinpad-export` | CSV of the field reports for SINPAD (US-33); 422 lists the reports with required fields missing. |
-| `POST /api/v1/emergencies/{emergencyId}/zones` | Register a zone of an active emergency. |
+| `POST /api/v1/emergencies/{emergencyId}/zones` | Register a zone of an active emergency. The authority who registers it is its responsible. |
 | `GET /api/v1/emergencies/{emergencyId}/zones` | Urgency ranking of the zones (US-06). Filters: `minScore`, `maxScore`, `need`. |
 | `GET /api/v1/zones/{id}` | One zone, with its score and priority level. |
 | `PATCH /api/v1/zones/{id}/population-impact` | Change some counts of the population impact; the others keep their value. Recalculates the score. |
@@ -263,6 +264,9 @@ any signed-in user; changes need a role (see [Roles](#roles)).
 | `PATCH /api/v1/field-reports/{id}/structured-data` | Correct or complete the indicators of a structured report, with a reason (US-03). |
 | `PUT /api/v1/zones/{id}/manual-priority` | Mark a zone as a priority by hand, with a justification (US-07). |
 | `DELETE /api/v1/zones/{id}/manual-priority` | Take the manual priority off a zone. |
+| `GET /api/v1/zones/{id}/history` | Decisions on the zone in chronological order, each with its authority and reason (US-20). |
+| `GET /api/v1/zones/in-charge` | Zones of active emergencies the signed-in authority is responsible for, with their last status (US-23). |
+| `POST /api/v1/shift-handovers` | Hand over the shift: the zones of the signed-in authority pass to another active authority of the organization (US-23). |
 
 A field report always belongs to an emergency. Registered in an emergency
 without `zoneId`, its zone is identified from the text: when exactly one zone
@@ -279,6 +283,16 @@ opens it well. The zone, the damage level, the people and the families affected
 are required: if a report lacks one, nothing is exported and the 422 lists
 `incompleteReports`, each with its `fieldReportId` and `missingFields`. An
 emergency without reports answers 404.
+
+Every decision of an authority on a zone is added to its history in the same
+transaction (US-20): the registration of the zone, the modification, approval or
+rejection of a plan, the manual priority set or removed, the correction of one
+of its reports and the shift changes. The entries are never changed, so the
+history keeps what a later decision replaced. Everyone sees the same history,
+so after a shift change the next responsible sees the decisions of the previous
+shift. At a shift change only the zones of active emergencies change hands; the
+next responsible must be an active authority of the same organization (422
+otherwise).
 
 ### Distribution plans (Emergency Management)
 
@@ -495,7 +509,7 @@ emergency without reports answers 404.
 
 | Role | Can change |
 |---|---|
-| `AUTHORITY` | Emergencies, zones, population impact, scores, field reports and their zone, distribution plans and their brigade, deliveries |
+| `AUTHORITY` | Emergencies, zones, population impact, scores, field reports and their zone, distribution plans and their brigade, deliveries, shift handovers |
 | `FIELD_BRIGADE` | Field reports (register and structure), deliveries |
 | `ORGANIZATION_ADMIN` | Inventory, brigades and the users of the organization |
 | `AUDITOR` | Nothing: reads only |
