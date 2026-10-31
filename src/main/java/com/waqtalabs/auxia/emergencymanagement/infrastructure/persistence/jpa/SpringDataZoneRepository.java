@@ -7,4 +7,6 @@ import org.springframework.data.jpa.repository.JpaRepository;
 interface SpringDataZoneRepository extends JpaRepository<ZoneJpaEntity, UUID> {
 
   List<ZoneJpaEntity> findByEmergencyIdOrderByCreatedAtAsc(UUID emergencyId);
+
+  List<ZoneJpaEntity> findByResponsibleAuthorityIdOrderByCreatedAtAsc(UUID authorityId);
 }

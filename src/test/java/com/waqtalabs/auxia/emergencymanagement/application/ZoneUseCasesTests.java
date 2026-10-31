@@ -15,6 +15,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.ZoneNotFoundExc
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Emergency;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AdministrativeLocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyType;
@@ -25,9 +26,12 @@ import com.waqtalabs.auxia.shared.domain.events.DomainEvent;
 import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 class ZoneUseCasesTests {
+
+  private static final AuthorityId AUTHORITY = new AuthorityId(UUID.randomUUID());
 
   private final InMemoryEmergencyRepository emergencies = new InMemoryEmergencyRepository();
   private final InMemoryZoneRepository zones = new InMemoryZoneRepository();
@@ -96,6 +100,7 @@ class ZoneUseCasesTests {
         name,
         null,
         new PopulationImpact(600, 35, 140, 40, 15, 0),
-        DamageLevel.SEVERE);
+        DamageLevel.SEVERE,
+        AUTHORITY);
   }
 }

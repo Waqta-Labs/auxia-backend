@@ -35,6 +35,7 @@ public final class Zone {
   private UrgencyScore urgencyScore;
   private LocalDateTime lastAidReceivedAt;
   private ManualPriority manualPriority;
+  private AuthorityId responsibleAuthority;
 
   private Zone(
       ZoneId id,
@@ -46,7 +47,8 @@ public final class Zone {
       ZoneStatus status,
       UrgencyScore urgencyScore,
       LocalDateTime lastAidReceivedAt,
-      ManualPriority manualPriority) {
+      ManualPriority manualPriority,
+      AuthorityId responsibleAuthority) {
     this.id = Objects.requireNonNull(id, "id");
     this.emergencyId = Objects.requireNonNull(emergencyId, "emergencyId");
     this.name = requireText(name);
@@ -57,6 +59,7 @@ public final class Zone {
     this.urgencyScore = urgencyScore;
     this.lastAidReceivedAt = lastAidReceivedAt;
     this.manualPriority = manualPriority;
+    this.responsibleAuthority = responsibleAuthority;
   }
 
   /**
@@ -80,6 +83,7 @@ public final class Zone {
         ZoneStatus.REGISTERED,
         null,
         null,
+        null,
         null);
   }
 
@@ -89,6 +93,7 @@ public final class Zone {
    * @param urgencyScore {@code null} while the score has not been calculated
    * @param lastAidReceivedAt {@code null} while no aid was delivered
    * @param manualPriority {@code null} while no authority marked the zone as a priority
+   * @param responsibleAuthority {@code null} for a zone registered before zones had one
    */
   public static Zone reconstitute(
       ZoneId id,
@@ -100,7 +105,8 @@ public final class Zone {
       ZoneStatus status,
       UrgencyScore urgencyScore,
       LocalDateTime lastAidReceivedAt,
-      ManualPriority manualPriority) {
+      ManualPriority manualPriority,
+      AuthorityId responsibleAuthority) {
     return new Zone(
         id,
         emergencyId,
@@ -111,7 +117,8 @@ public final class Zone {
         status,
         urgencyScore,
         lastAidReceivedAt,
-        manualPriority);
+        manualPriority,
+        responsibleAuthority);
   }
 
   public boolean belongsTo(EmergencyId emergencyId) {
@@ -190,6 +197,19 @@ public final class Zone {
 
   public Optional<ManualPriority> manualPriority() {
     return Optional.ofNullable(manualPriority);
+  }
+
+  /**
+   * The authority who follows the zone: the one who registered it, until a shift change passes it
+   * to the next one (US-23).
+   */
+  public void assignResponsible(AuthorityId authority) {
+    responsibleAuthority = Objects.requireNonNull(authority, "authority");
+  }
+
+  /** Empty for a zone registered before zones had a responsible authority. */
+  public Optional<AuthorityId> responsibleAuthority() {
+    return Optional.ofNullable(responsibleAuthority);
   }
 
   /**

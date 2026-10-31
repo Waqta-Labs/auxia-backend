@@ -2,8 +2,10 @@ package com.waqtalabs.auxia.emergencymanagement.application.queryservices;
 
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneByIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneRankingQuery;
+import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZonesInChargeQuery;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyNotFoundException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.ZoneNotFoundException;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Emergency;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
@@ -25,7 +27,6 @@ import org.springframework.transaction.annotation.Transactional;
 @Transactional(readOnly = true)
 public class ZoneQueryService {
 
-  /** Highest score first; zones without a score last. The sort is stable for ties. */
   /** Manually prioritized zones first (US-07), then by score; zones without score last. */
   private static final Comparator<ZoneRankingEntry> BY_URGENCY =
       Comparator.comparing((ZoneRankingEntry entry) -> !entry.zone().isPrioritizedManually())
@@ -51,6 +52,21 @@ public class ZoneQueryService {
     return zoneRepository
         .findById(query.zoneId())
         .orElseThrow(() -> new ZoneNotFoundException(query.zoneId()));
+  }
+
+  /**
+   * Zones of active emergencies the authority follows, with their last status (US-23, scenario
+   * 2): the ones it registered and the ones it received at a shift change. In registration order.
+   */
+  public List<Zone> handle(GetZonesInChargeQuery query) {
+    return zoneRepository.findByResponsibleAuthority(query.authorityId()).stream()
+        .filter(
+            zone ->
+                emergencyRepository
+                    .findById(zone.emergencyId())
+                    .map(Emergency::isActive)
+                    .orElse(false))
+        .toList();
   }
 
   /**

@@ -1,6 +1,7 @@
 package com.waqtalabs.auxia.emergencymanagement.application;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.ZoneRepository;
@@ -28,5 +29,12 @@ public class InMemoryZoneRepository implements ZoneRepository {
   @Override
   public List<Zone> findByEmergencyId(EmergencyId emergencyId) {
     return zones.values().stream().filter(zone -> zone.belongsTo(emergencyId)).toList();
+  }
+
+  @Override
+  public List<Zone> findByResponsibleAuthority(AuthorityId authority) {
+    return zones.values().stream()
+        .filter(zone -> zone.responsibleAuthority().filter(authority::equals).isPresent())
+        .toList();
   }
 }

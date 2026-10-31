@@ -2,8 +2,11 @@ package com.waqtalabs.auxia.emergencymanagement.interfaces.rest.assemblers;
 
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterZoneCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.UpdateZonePopulationImpactCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneHistoryEntry;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneRankingEntry;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.ZoneDecision;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
@@ -14,6 +17,7 @@ import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ManualP
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.PopulationImpactResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterZoneRequest;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ScoreContributionResource;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneDecisionResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneRankingItemResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneScoreResource;
@@ -26,7 +30,8 @@ public final class ZoneResourceAssembler {
   private ZoneResourceAssembler() {}
 
   /** Missing counts are 0, as in the database. */
-  public static RegisterZoneCommand toCommand(UUID emergencyId, RegisterZoneRequest request) {
+  public static RegisterZoneCommand toCommand(
+      UUID emergencyId, RegisterZoneRequest request, AuthorityId registeredBy) {
     GeolocationResource geolocation = request.geolocation();
     PopulationImpactResource impact = request.populationImpact();
     return new RegisterZoneCommand(
@@ -42,7 +47,8 @@ public final class ZoneResourceAssembler {
             orZero(impact.children()),
             orZero(impact.elderlyPeople()),
             orZero(impact.disabledPeople())),
-        request.damageLevel());
+        request.damageLevel(),
+        registeredBy);
   }
 
   /** Missing counts keep their current value. */
@@ -80,7 +86,21 @@ public final class ZoneResourceAssembler {
         score.map(UrgencyScore::value).orElse(null),
         score.map(UrgencyScore::level).orElse(null),
         zone.lastAidReceivedAt().orElse(null),
-        manualPriority(zone));
+        manualPriority(zone),
+        zone.responsibleAuthority().map(AuthorityId::value).orElse(null));
+  }
+
+  public static ZoneDecisionResource toResource(ZoneHistoryEntry entry) {
+    ZoneDecision decision = entry.decision();
+    return new ZoneDecisionResource(
+        decision.type(),
+        decision.decidedAt(),
+        decision.decidedBy().value(),
+        entry.decidedByName(),
+        decision.detail().orElse(null),
+        decision.subjectId().orElse(null),
+        decision.handedOverTo().map(AuthorityId::value).orElse(null),
+        entry.handedOverToName());
   }
 
   public static ZoneRankingItemResource toRankingItem(ZoneRankingEntry entry) {
