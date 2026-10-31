@@ -1,10 +1,14 @@
 package com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates;
 
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.CorrectionReasonRequiredException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportAlreadyAssignedException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportAlreadyProcessedException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportNotStructuredException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.ZoneOutsideEmergencyException;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldReportId;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ReportCorrection;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ReportSource;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
@@ -28,6 +32,7 @@ public final class FieldReport {
   private final LocalDateTime reportedAt;
   private ZoneId zoneId;
   private StructuredFieldData structuredData;
+  private ReportCorrection correction;
 
   private FieldReport(
       FieldReportId id,
@@ -36,27 +41,33 @@ public final class FieldReport {
       String rawText,
       ReportSource source,
       LocalDateTime reportedAt,
-      StructuredFieldData structuredData) {
+      StructuredFieldData structuredData,
+      ReportCorrection correction) {
     this.id = Objects.requireNonNull(id, "id");
     this.emergencyId = Objects.requireNonNull(emergencyId, "emergencyId");
     this.zoneId = zoneId;
     this.rawText = requireText(rawText);
     this.source = Objects.requireNonNull(source, "source");
     this.reportedAt = Objects.requireNonNull(reportedAt, "reportedAt");
+    if (correction != null && structuredData == null) {
+      throw new IllegalArgumentException("Only a structured report has a correction");
+    }
     this.structuredData = structuredData;
+    this.correction = correction;
   }
 
   /** Registers a report of the emergency, still without a zone and not processed. */
   public static FieldReport register(
       EmergencyId emergencyId, String rawText, ReportSource source, LocalDateTime reportedAt) {
     return new FieldReport(
-        FieldReportId.generate(), emergencyId, null, rawText, source, reportedAt, null);
+        FieldReportId.generate(), emergencyId, null, rawText, source, reportedAt, null, null);
   }
 
   /**
    * Rebuilds a report that is already stored, without registering it again.
    *
    * @param structuredData {@code null} while the report is not processed
+   * @param correction {@code null} while nobody corrected the indicators
    */
   public static FieldReport reconstitute(
       FieldReportId id,
@@ -65,8 +76,10 @@ public final class FieldReport {
       String rawText,
       ReportSource source,
       LocalDateTime reportedAt,
-      StructuredFieldData structuredData) {
-    return new FieldReport(id, emergencyId, zoneId, rawText, source, reportedAt, structuredData);
+      StructuredFieldData structuredData,
+      ReportCorrection correction) {
+    return new FieldReport(
+        id, emergencyId, zoneId, rawText, source, reportedAt, structuredData, correction);
   }
 
   /**
@@ -84,6 +97,27 @@ public final class FieldReport {
 
   public boolean isProcessed() {
     return structuredData != null;
+  }
+
+  /**
+   * Replaces the indicators used from now on with ones corrected by an authority (US-03). The
+   * indicators of the NLP stay as they were; a new correction replaces the previous one.
+   *
+   * @throws FieldReportNotStructuredException if the NLP has not structured the report yet
+   * @throws CorrectionReasonRequiredException if the reason is blank
+   */
+  public void correct(
+      StructuredFieldData correctedData,
+      AuthorityId correctedBy,
+      LocalDateTime correctedAt,
+      String reason) {
+    if (!isProcessed()) {
+      throw new FieldReportNotStructuredException(id);
+    }
+    if (reason == null || reason.isBlank()) {
+      throw new CorrectionReasonRequiredException(id);
+    }
+    correction = new ReportCorrection(correctedData, correctedBy, correctedAt, reason.strip());
   }
 
   /**
@@ -131,9 +165,21 @@ public final class FieldReport {
     return reportedAt;
   }
 
-  /** Empty while the report is not processed. */
+  /**
+   * The indicators that count: the corrected ones if an authority corrected them, else those of
+   * the NLP. Empty while the report is not processed.
+   */
   public Optional<StructuredFieldData> structuredData() {
+    return correction != null ? Optional.of(correction.correctedData()) : originalData();
+  }
+
+  /** The indicators as the NLP extracted them; empty while the report is not processed. */
+  public Optional<StructuredFieldData> originalData() {
     return Optional.ofNullable(structuredData);
+  }
+
+  public Optional<ReportCorrection> correction() {
+    return Optional.ofNullable(correction);
   }
 
   private static String requireText(String value) {

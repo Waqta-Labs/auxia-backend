@@ -159,6 +159,7 @@ application starts.
 | V4 | `distribution_plans`: organization, coverage and the last modification (who, when, why); `distribution_items.recommended_quantity`, so the original recommendation survives a modification (US-13, US-14). |
 | V5 | `deliveries.organization_id`; a `REGISTERED` delivery keeps its `transaction_hash` from the moment it is sent, while its anchoring is `PENDING`. |
 | V6 | Projects once, into `citizen_transparency`, the emergencies and zones that existed before the public view, with the stage of their latest plan and delivery. |
+| V7 | `field_reports`: the indicators corrected by an authority, next to those of the NLP, with who, when and why (US-03). `zones`: the manual priority with who, when and why (US-07). |
 
 Neon already had the schema of V1 when Flyway was added, so on Neon V1 is
 recorded as the baseline (`baseline-on-migrate`) and only V2 onwards run. An
@@ -257,6 +258,9 @@ any signed-in user; changes need a role (see [Roles](#roles)).
 | `GET /api/v1/field-reports/{id}` | One report, with its structured data. |
 | `POST /api/v1/field-reports/{id}/structure` | Structure a report that is not processed yet (US-02). |
 | `PATCH /api/v1/field-reports/{id}/zone` | Assign the zone of a pending report. |
+| `PATCH /api/v1/field-reports/{id}/structured-data` | Correct or complete the indicators of a structured report, with a reason (US-03). |
+| `PUT /api/v1/zones/{id}/manual-priority` | Mark a zone as a priority by hand, with a justification (US-07). |
+| `DELETE /api/v1/zones/{id}/manual-priority` | Take the manual priority off a zone. |
 
 A field report always belongs to an emergency. Registered in an emergency
 without `zoneId`, its zone is identified from the text: when exactly one zone
@@ -481,6 +485,12 @@ decides what to send and when (TS-C04).
   of a zone is recalculated when the zone is registered, when one of its
   reports is structured and when a pending report is assigned to it. Each step
   runs after the commit, in its own transaction.
+- **Manual corrections.** An authority corrects or completes the indicators of a
+  structured report with a reason (US-03). The corrected values are used from
+  then on and the score of the zone is calculated again; the report keeps the
+  values of the NLP under `correction.originalData`, with who corrected them,
+  when and why. A zone marked as a priority by hand, with its justification,
+  goes first in the ranking and shows `manualPriority` (US-07).
 - **Most severe data.** The score receives, for each variable, the most severe
   value between the zone and its processed reports: the highest damage level,
   the largest counts and every need mentioned. The data registered for the zone

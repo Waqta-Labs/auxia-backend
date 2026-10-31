@@ -1,9 +1,11 @@
 package com.waqtalabs.auxia.emergencymanagement.interfaces.rest;
 
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.AssignFieldReportZoneCommandHandler;
+import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.CorrectFieldReportCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterFieldReportCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.StructureFieldReportCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.AssignFieldReportZoneCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.commands.CorrectFieldReportCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterFieldReportCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.StructureFieldReportCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportByIdQuery;
@@ -11,14 +13,17 @@ import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldRepor
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportsByZoneIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.FieldReportQueryService;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldReport;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.assemblers.FieldReportResourceAssembler;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.AssignFieldReportZoneRequest;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.CorrectFieldReportRequest;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.FieldReportResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterEmergencyFieldReportRequest;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterFieldReportRequest;
+import com.waqtalabs.auxia.shared.infrastructure.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -29,6 +34,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -48,16 +54,19 @@ public class FieldReportController {
   private final RegisterFieldReportCommandHandler registerFieldReport;
   private final AssignFieldReportZoneCommandHandler assignFieldReportZone;
   private final StructureFieldReportCommandHandler structureFieldReport;
+  private final CorrectFieldReportCommandHandler correctFieldReport;
   private final FieldReportQueryService fieldReportQueries;
 
   public FieldReportController(
       RegisterFieldReportCommandHandler registerFieldReport,
       AssignFieldReportZoneCommandHandler assignFieldReportZone,
       StructureFieldReportCommandHandler structureFieldReport,
+      CorrectFieldReportCommandHandler correctFieldReport,
       FieldReportQueryService fieldReportQueries) {
     this.registerFieldReport = registerFieldReport;
     this.assignFieldReportZone = assignFieldReportZone;
     this.structureFieldReport = structureFieldReport;
+    this.correctFieldReport = correctFieldReport;
     this.fieldReportQueries = fieldReportQueries;
   }
 
@@ -160,6 +169,36 @@ public class FieldReportController {
         new AssignFieldReportZoneCommand(
             new FieldReportId(fieldReportId), new ZoneId(request.zoneId()));
     return FieldReportResourceAssembler.toResource(assignFieldReportZone.handle(command));
+  }
+
+  @PreAuthorize("hasRole('AUTHORITY')")
+  @PatchMapping("/field-reports/{fieldReportId}/structured-data")
+  @Operation(
+      summary = "Correct or complete the indicators of a structured report",
+      description =
+          "Send only the indicators to change, and the reason. The corrected values are used in"
+              + " the next score of the zone; the values of the NLP are kept (US-03).")
+  @ApiResponse(responseCode = "200", description = "Indicators corrected")
+  @ApiResponse(responseCode = "400", description = "The reason is missing or a count is negative")
+  @ApiResponse(responseCode = "404", description = "The report does not exist")
+  @ApiResponse(responseCode = "409", description = "The report is not structured yet")
+  public FieldReportResource correct(
+      @PathVariable UUID fieldReportId,
+      @Valid @RequestBody CorrectFieldReportRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var command =
+        new CorrectFieldReportCommand(
+            new FieldReportId(fieldReportId),
+            new AuthorityId(user.userId()),
+            request.damageLevel(),
+            request.familiesAffected(),
+            request.peopleAffected(),
+            request.children(),
+            request.elderlyPeople(),
+            request.disabledPeople(),
+            request.needs(),
+            request.reason());
+    return FieldReportResourceAssembler.toResource(correctFieldReport.handle(command));
   }
 
   private ResponseEntity<FieldReportResource> created(RegisterFieldReportCommand command) {

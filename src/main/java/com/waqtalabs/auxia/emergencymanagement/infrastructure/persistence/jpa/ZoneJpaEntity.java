@@ -66,6 +66,15 @@ class ZoneJpaEntity {
   @Column(name = "last_aid_received_at")
   LocalDateTime lastAidReceivedAt;
 
+  @Column(name = "manual_priority_by")
+  UUID manualPriorityBy;
+
+  @Column(name = "manual_priority_at")
+  LocalDateTime manualPriorityAt;
+
+  @Column(name = "manual_priority_reason")
+  String manualPriorityReason;
+
   @Column(name = "urgency_score", precision = 5, scale = 2)
   BigDecimal urgencyScore;
 

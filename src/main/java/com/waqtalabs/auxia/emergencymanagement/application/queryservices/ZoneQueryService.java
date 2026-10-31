@@ -26,11 +26,13 @@ import org.springframework.transaction.annotation.Transactional;
 public class ZoneQueryService {
 
   /** Highest score first; zones without a score last. The sort is stable for ties. */
+  /** Manually prioritized zones first (US-07), then by score; zones without score last. */
   private static final Comparator<ZoneRankingEntry> BY_URGENCY =
-      Comparator.comparing(
-          (ZoneRankingEntry entry) ->
-              entry.zone().urgencyScore().map(UrgencyScore::value).orElse(null),
-          Comparator.nullsLast(Comparator.reverseOrder()));
+      Comparator.comparing((ZoneRankingEntry entry) -> !entry.zone().isPrioritizedManually())
+          .thenComparing(
+              (ZoneRankingEntry entry) ->
+                  entry.zone().urgencyScore().map(UrgencyScore::value).orElse(null),
+              Comparator.nullsLast(Comparator.reverseOrder()));
 
   private final EmergencyRepository emergencyRepository;
   private final ZoneRepository zoneRepository;

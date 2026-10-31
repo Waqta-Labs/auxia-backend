@@ -3,22 +3,28 @@ package com.waqtalabs.auxia.emergencymanagement.interfaces.rest;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.CalculateUrgencyScoreCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterZoneCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.UpdateZonePopulationImpactCommandHandler;
+import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.ZoneManualPriorityCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.CalculateUrgencyScoreCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.commands.PrioritizeZoneManuallyCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.commands.RemoveZoneManualPriorityCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneByIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneRankingQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneReportQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneQueryService;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneReportQueryService;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.assemblers.ZoneResourceAssembler;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ManualPriorityRequest;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.PopulationImpactResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterZoneRequest;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneRankingItemResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ZoneScoreResource;
+import com.waqtalabs.auxia.shared.infrastructure.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.Parameter;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -35,10 +41,13 @@ import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
+import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -54,18 +63,55 @@ public class ZoneController {
   private final CalculateUrgencyScoreCommandHandler calculateUrgencyScore;
   private final ZoneQueryService zoneQueries;
   private final ZoneReportQueryService zoneReports;
+  private final ZoneManualPriorityCommandHandler manualPriority;
 
   public ZoneController(
       RegisterZoneCommandHandler registerZone,
       UpdateZonePopulationImpactCommandHandler updatePopulationImpact,
       CalculateUrgencyScoreCommandHandler calculateUrgencyScore,
       ZoneQueryService zoneQueries,
-      ZoneReportQueryService zoneReports) {
+      ZoneReportQueryService zoneReports,
+      ZoneManualPriorityCommandHandler manualPriority) {
     this.registerZone = registerZone;
     this.updatePopulationImpact = updatePopulationImpact;
     this.calculateUrgencyScore = calculateUrgencyScore;
     this.zoneQueries = zoneQueries;
     this.zoneReports = zoneReports;
+    this.manualPriority = manualPriority;
+  }
+
+  @PreAuthorize("hasRole('AUTHORITY')")
+  @PutMapping("/zones/{zoneId}/manual-priority")
+  @Operation(
+      summary = "Mark a zone as a priority by hand",
+      description =
+          "For a risk the score does not capture, such as an imminent one. The zone goes first"
+              + " in the ranking and shows who marked it, when and why (US-07).")
+  @ApiResponse(responseCode = "200", description = "Zone prioritized")
+  @ApiResponse(responseCode = "400", description = "The justification is missing")
+  @ApiResponse(responseCode = "404", description = "The zone does not exist")
+  public ZoneResource prioritizeManually(
+      @PathVariable UUID zoneId,
+      @Valid @RequestBody ManualPriorityRequest request,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var command =
+        new PrioritizeZoneManuallyCommand(
+            new ZoneId(zoneId), new AuthorityId(user.userId()), request.reason());
+    return ZoneResourceAssembler.toResource(manualPriority.handle(command));
+  }
+
+  @PreAuthorize("hasRole('AUTHORITY')")
+  @DeleteMapping("/zones/{zoneId}/manual-priority")
+  @Operation(
+      summary = "Take the manual priority off a zone",
+      description = "The score orders the zone again.")
+  @ApiResponse(responseCode = "200", description = "Manual priority removed")
+  @ApiResponse(responseCode = "404", description = "The zone does not exist")
+  public ZoneResource removeManualPriority(
+      @PathVariable UUID zoneId, @AuthenticationPrincipal AuthenticatedUser user) {
+    var command =
+        new RemoveZoneManualPriorityCommand(new ZoneId(zoneId), new AuthorityId(user.userId()));
+    return ZoneResourceAssembler.toResource(manualPriority.handle(command));
   }
 
   @PreAuthorize("hasRole('AUTHORITY')")

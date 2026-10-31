@@ -10,6 +10,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Populat
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.GeolocationResource;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ManualPriorityResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.PopulationImpactResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterZoneRequest;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.ScoreContributionResource;
@@ -78,7 +79,8 @@ public final class ZoneResourceAssembler {
         zone.status(),
         score.map(UrgencyScore::value).orElse(null),
         score.map(UrgencyScore::level).orElse(null),
-        zone.lastAidReceivedAt().orElse(null));
+        zone.lastAidReceivedAt().orElse(null),
+        manualPriority(zone));
   }
 
   public static ZoneRankingItemResource toRankingItem(ZoneRankingEntry entry) {
@@ -92,7 +94,17 @@ public final class ZoneResourceAssembler {
         zone.populationImpact().peopleAffected(),
         score.map(UrgencyScore::value).orElse(null),
         score.map(UrgencyScore::level).orElse(null),
-        entry.needs());
+        entry.needs(),
+        manualPriority(zone));
+  }
+
+  private static ManualPriorityResource manualPriority(Zone zone) {
+    return zone.manualPriority()
+        .map(
+            priority ->
+                new ManualPriorityResource(
+                    priority.reason(), priority.setBy().value(), priority.setAt()))
+        .orElse(null);
   }
 
   /**

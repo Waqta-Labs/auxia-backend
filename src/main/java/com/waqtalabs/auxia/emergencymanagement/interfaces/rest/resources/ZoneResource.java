@@ -8,7 +8,8 @@ import java.util.UUID;
 
 /**
  * {@code score} and {@code priorityLevel} are {@code null} until the score is calculated, and
- * {@code lastAidReceivedAt} until a brigade delivers aid in the zone.
+ * {@code lastAidReceivedAt} until a brigade delivers aid in the zone, and {@code manualPriority}
+ * unless an authority marked the zone as a priority by hand (US-07).
  */
 public record ZoneResource(
     UUID id,
@@ -20,4 +21,5 @@ public record ZoneResource(
     ZoneStatus status,
     Double score,
     PriorityLevel priorityLevel,
-    LocalDateTime lastAidReceivedAt) {}
+    LocalDateTime lastAidReceivedAt,
+    ManualPriorityResource manualPriority) {}
