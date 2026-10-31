@@ -1,6 +1,7 @@
 package com.waqtalabs.auxia.emergencymanagement.infrastructure.persistence.jpa;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.ZoneRepository;
@@ -33,6 +34,13 @@ class JpaZoneRepository implements ZoneRepository {
   @Override
   public List<Zone> findByEmergencyId(EmergencyId emergencyId) {
     return repository.findByEmergencyIdOrderByCreatedAtAsc(emergencyId.value()).stream()
+        .map(ZoneJpaMapper::toDomain)
+        .toList();
+  }
+
+  @Override
+  public List<Zone> findByResponsibleAuthority(AuthorityId authority) {
+    return repository.findByResponsibleAuthorityIdOrderByCreatedAtAsc(authority.value()).stream()
         .map(ZoneJpaMapper::toDomain)
         .toList();
   }

@@ -8,6 +8,10 @@ import com.waqtalabs.auxia.identityaccess.domain.model.valueobjects.Role;
 import com.waqtalabs.auxia.identityaccess.domain.model.valueobjects.UserId;
 import com.waqtalabs.auxia.identityaccess.domain.repositories.UserAccountRepository;
 import java.util.Arrays;
+import java.util.Collection;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -55,5 +59,17 @@ public class IdentityAccessContextFacade {
         .findById(new UserId(userId))
         .map(UserAccount::organizationId)
         .map(OrganizationId::value);
+  }
+
+  /** Full name of each user that exists; an unknown user is left out. */
+  @Transactional(readOnly = true)
+  public Map<UUID, String> getFullNames(Collection<UUID> userIds) {
+    Map<UUID, String> names = new HashMap<>();
+    for (UUID userId : new HashSet<>(userIds)) {
+      userAccountRepository
+          .findById(new UserId(userId))
+          .ifPresent(user -> names.put(userId, user.name().fullName()));
+    }
+    return names;
   }
 }

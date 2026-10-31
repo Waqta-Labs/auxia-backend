@@ -34,6 +34,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Emergency
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AdministrativeLocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyType;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldReportId;
@@ -52,10 +53,13 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
+import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
 /** Structuring of field reports, urgency score and ranking with a fake AI Service (US-02-06). */
 class UrgencyScoreUseCasesTests {
+
+  private static final AuthorityId AUTHORITY = new AuthorityId(UUID.randomUUID());
 
   private static final String REPORT_TEXT = "Colapso total de viviendas en Alto Perú.";
   private static final StructuredFieldData CRITICAL_REPORT =
@@ -92,7 +96,8 @@ class UrgencyScoreUseCasesTests {
     Zone zone = zone("Sector Alto Perú", 600, 140, DamageLevel.SEVERE);
 
     assertThat(events)
-        .containsExactly(new ZoneRegistered(zone.id(), emergency.id(), "Sector Alto Perú"));
+        .containsExactly(
+            new ZoneRegistered(zone.id(), emergency.id(), "Sector Alto Perú", AUTHORITY));
   }
 
   @Test
@@ -287,7 +292,8 @@ class UrgencyScoreUseCasesTests {
             name,
             null,
             new PopulationImpact(population, 35, peopleAffected, 40, 15, 0),
-            damage));
+            damage,
+            AUTHORITY));
   }
 
   private FieldReport report(Zone zone) {

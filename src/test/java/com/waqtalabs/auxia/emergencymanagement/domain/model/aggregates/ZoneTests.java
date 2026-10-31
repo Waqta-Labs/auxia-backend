@@ -219,6 +219,7 @@ class ZoneTests {
             ZoneStatus.PRIORITIZED,
             null,
             null,
+            null,
             null);
 
     assertThat(zone.id()).isEqualTo(stored.id());

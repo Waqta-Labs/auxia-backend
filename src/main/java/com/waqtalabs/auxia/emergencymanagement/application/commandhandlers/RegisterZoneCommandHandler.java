@@ -12,8 +12,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 /**
- * Loads the emergency first, so a closed emergency rejects the new zone. It publishes
- * ZoneRegistered, which calculates the first urgency score of the zone.
+ * Loads the emergency first, so a closed emergency rejects the new zone. The authority who
+ * registers it becomes its responsible. It publishes ZoneRegistered, which calculates the first
+ * urgency score of the zone and opens its history.
  */
 @Service
 public class RegisterZoneCommandHandler {
@@ -43,8 +44,10 @@ public class RegisterZoneCommandHandler {
             command.geolocation(),
             command.populationImpact(),
             command.damageLevel());
+    zone.assignResponsible(command.registeredBy());
     Zone saved = zoneRepository.save(zone);
-    eventPublisher.publish(new ZoneRegistered(saved.id(), saved.emergencyId(), saved.name()));
+    eventPublisher.publish(
+        new ZoneRegistered(saved.id(), saved.emergencyId(), saved.name(), command.registeredBy()));
     return saved;
   }
 }
