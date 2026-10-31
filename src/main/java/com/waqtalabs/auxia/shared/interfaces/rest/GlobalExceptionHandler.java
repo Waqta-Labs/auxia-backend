@@ -54,7 +54,8 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
 
   /**
    * An error of the domain: 404, 409 or 422 depending on its category. The title belongs to the
-   * category and the detail to the concrete exception, filled with its arguments.
+   * category and the detail to the concrete exception, filled with its arguments; its properties
+   * are added as members of the problem detail.
    */
   @ExceptionHandler(DomainException.class)
   public ResponseEntity<Object> handleDomainException(DomainException ex, WebRequest request) {
@@ -77,6 +78,7 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             .detailMessageArguments(ex.arguments())
             .build()
             .updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
+    ex.properties().forEach(body::setProperty);
     return handleExceptionInternal(ex, body, new HttpHeaders(), status, request);
   }
 

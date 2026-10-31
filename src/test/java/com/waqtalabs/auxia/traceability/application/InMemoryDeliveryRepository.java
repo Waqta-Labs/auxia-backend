@@ -6,6 +6,8 @@ import com.waqtalabs.auxia.traceability.domain.model.valueobjects.DistributionPl
 import com.waqtalabs.auxia.traceability.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.traceability.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.traceability.domain.repositories.DeliveryRepository;
+import java.time.LocalDateTime;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,6 +43,23 @@ public class InMemoryDeliveryRepository implements DeliveryRepository {
         .filter(delivery -> delivery.belongsTo(organizationId))
         .toList()
         .reversed();
+  }
+
+  @Override
+  public List<Delivery> findCompleted(
+      OrganizationId organizationId, ZoneId zoneId, LocalDateTime from, LocalDateTime to) {
+    return deliveries.values().stream()
+        .filter(delivery -> delivery.belongsTo(organizationId))
+        .filter(delivery -> zoneId == null || delivery.zoneId().equals(zoneId))
+        .filter(delivery -> delivery.registration().isPresent())
+        .filter(
+            delivery -> {
+              LocalDateTime at = delivery.registration().orElseThrow().deliveredAt();
+              return (from == null || !at.isBefore(from)) && (to == null || at.isBefore(to));
+            })
+        .sorted(
+            Comparator.comparing(delivery -> delivery.registration().orElseThrow().deliveredAt()))
+        .toList();
   }
 
   @Override
