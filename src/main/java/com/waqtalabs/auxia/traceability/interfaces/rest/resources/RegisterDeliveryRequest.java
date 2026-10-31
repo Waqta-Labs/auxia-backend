@@ -20,7 +20,6 @@ public record RegisterDeliveryRequest(
         LocalDateTime deliveredAt,
     @Schema(description = "What was delivered; it can be less than planned")
         @NotEmpty
-        @Valid
-        List<DeliveredItemRequest> items,
+        List<@Valid DeliveredItemRequest> items,
     @Schema(description = "Where the evidence was captured; optional") @Valid
         GeoPointResource location) {}
