@@ -22,8 +22,8 @@ import org.hibernate.type.SqlTypes;
  * Row of {@code emergency_management.zones}. Only {@link ZoneJpaMapper} uses it.
  *
  * <p>The {@code urgency_*} columns hold the UrgencyScore value object: all of them are {@code
- * null} until the score is calculated. The last aid received is not mapped yet: Hibernate leaves
- * that column untouched until the traceability phase.
+ * null} until the score is calculated. The {@code manual_priority_*} columns hold the
+ * ManualPriority value object in the same way.
  */
 @Entity
 @Table(schema = "emergency_management", name = "zones")

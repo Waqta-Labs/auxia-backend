@@ -177,6 +177,14 @@ class DistributionPlanControllerTests {
     send(patch(items), organization.authority(), "{\"items\": [], \"reason\": \"\"}")
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[*].field").value(containsInAnyOrder("items", "reason")));
+    send(
+            patch(items),
+            organization.authority(),
+            "{\"items\": [{\"quantity\": -1}], \"reason\": \"Ajuste\"}")
+        .andExpect(status().isBadRequest())
+        .andExpect(
+            jsonPath("$.errors[*].field")
+                .value(containsInAnyOrder("items[0].resourceId", "items[0].quantity")));
 
     mockMvc
         .perform(get("/api/v1/distribution-plans/" + planId).with(organization.auditor()))

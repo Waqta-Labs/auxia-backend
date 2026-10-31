@@ -9,7 +9,7 @@ import java.util.List;
 
 /** Resources not listed keep their quantity; a resource not in the plan is added. */
 public record ModifyDistributionPlanRequest(
-    @NotEmpty @Valid List<ResourceQuantityRequest> items,
+    @NotEmpty List<@Valid ResourceQuantityRequest> items,
     @Schema(
             description = "Why the recommendation changes, for a later audit (US-14)",
             example = "La zona recibió víveres de otra ONG")
