@@ -10,6 +10,7 @@ import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterEmer
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetActiveEmergenciesQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetEmergencyByIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.EmergencyQueryService;
+import com.waqtalabs.auxia.emergencymanagement.domain.events.EmergencyRegistered;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyAlreadyClosedException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyNotFoundException;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Emergency;
@@ -17,14 +18,18 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Adminis
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyStatus;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyType;
+import com.waqtalabs.auxia.shared.domain.events.DomainEvent;
 import java.time.LocalDate;
+import java.util.ArrayList;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 class EmergencyUseCasesTests {
 
   private final InMemoryEmergencyRepository emergencies = new InMemoryEmergencyRepository();
+  private final List<DomainEvent> events = new ArrayList<>();
   private final RegisterEmergencyCommandHandler register =
-      new RegisterEmergencyCommandHandler(emergencies);
+      new RegisterEmergencyCommandHandler(emergencies, events::add);
   private final CloseEmergencyCommandHandler close = new CloseEmergencyCommandHandler(emergencies);
   private final EmergencyQueryService queries = new EmergencyQueryService(emergencies);
 
@@ -34,6 +39,14 @@ class EmergencyUseCasesTests {
 
     assertThat(emergencies.findById(emergency.id())).contains(emergency);
     assertThat(emergency.status()).isEqualTo(EmergencyStatus.ACTIVE);
+    assertThat(events)
+        .containsExactly(
+            new EmergencyRegistered(
+                emergency.id(),
+                "Huaico Chosica 2026",
+                emergency.type(),
+                emergency.location(),
+                emergency.startDate()));
   }
 
   @Test

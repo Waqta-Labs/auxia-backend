@@ -5,6 +5,8 @@ import com.waqtalabs.auxia.traceability.application.commands.AnchorDeliveryComma
 import com.waqtalabs.auxia.traceability.domain.events.DeliveryConfirmed;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.core.Ordered;
+import org.springframework.core.annotation.Order;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.PlatformTransactionManager;
@@ -19,7 +21,8 @@ import org.springframework.transaction.support.TransactionTemplate;
  * blockchain can take tens of seconds: the brigade gets its answer without waiting, and the
  * registration is never undone if the network fails. The committed transaction of the
  * registration is suspended, so each change of the anchoring is saved in a transaction of its
- * own even when the executor runs it in the same thread.
+ * own even when the executor runs it in the same thread. It is the last reaction to the
+ * confirmation, so the other contexts see the delivery before its certification.
  */
 @Component
 public class DeliveryConfirmedEventHandler {
@@ -38,6 +41,7 @@ public class DeliveryConfirmedEventHandler {
   }
 
   @Async("anchoringExecutor")
+  @Order(Ordered.LOWEST_PRECEDENCE)
   @TransactionalEventListener(fallbackExecution = true)
   public void on(DeliveryConfirmed event) {
     try {
