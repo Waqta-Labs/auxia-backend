@@ -6,17 +6,21 @@ import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.Regist
 import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.RestockResourceCommandHandler;
 import com.waqtalabs.auxia.resourcemanagement.application.queries.GetInventoryByIdQuery;
 import com.waqtalabs.auxia.resourcemanagement.application.queries.GetInventoryByOrganizationIdQuery;
+import com.waqtalabs.auxia.resourcemanagement.application.queries.GetStockAlertsQuery;
 import com.waqtalabs.auxia.resourcemanagement.application.queryservices.InventoryQueryService;
+import com.waqtalabs.auxia.resourcemanagement.application.queryservices.StockAlertQueryService;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Inventory;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.InventoryId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ResourceCategory;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.StockAlertStatus;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.assemblers.InventoryResourceAssembler;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.AdjustStockRequest;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.CreateInventoryRequest;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.InventoryResource;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.RegisterResourceRequest;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.RestockRequest;
+import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.StockAlertResource;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.StockItemResource;
 import com.waqtalabs.auxia.shared.infrastructure.security.AuthenticatedUser;
 import io.swagger.v3.oas.annotations.Operation;
@@ -25,6 +29,7 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.util.List;
 import java.util.UUID;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
@@ -54,18 +59,21 @@ public class InventoryController {
   private final RestockResourceCommandHandler restockResource;
   private final AdjustStockCommandHandler adjustStock;
   private final InventoryQueryService inventoryQueries;
+  private final StockAlertQueryService stockAlerts;
 
   public InventoryController(
       CreateInventoryCommandHandler createInventory,
       RegisterResourceCommandHandler registerResource,
       RestockResourceCommandHandler restockResource,
       AdjustStockCommandHandler adjustStock,
-      InventoryQueryService inventoryQueries) {
+      InventoryQueryService inventoryQueries,
+      StockAlertQueryService stockAlerts) {
     this.createInventory = createInventory;
     this.registerResource = registerResource;
     this.restockResource = restockResource;
     this.adjustStock = adjustStock;
     this.inventoryQueries = inventoryQueries;
+    this.stockAlerts = stockAlerts;
   }
 
   @PostMapping
@@ -112,6 +120,38 @@ public class InventoryController {
         inventoryQueries.handle(
             new GetInventoryByIdQuery(new InventoryId(inventoryId), organizationOf(user)));
     return InventoryResourceAssembler.toResource(inventory, category);
+  }
+
+  @GetMapping("/{inventoryId}/alerts")
+  @Operation(
+      summary = "List the low stock alerts of an inventory",
+      description =
+          "An alert is raised when the available quantity of a resource falls below its minimum"
+              + " stock, and resolved when it is restocked above it (US-10). Most recent first.")
+  @ApiResponse(responseCode = "200", description = "Alerts of the inventory")
+  @ApiResponse(responseCode = "404", description = "Not an inventory of the organization")
+  public List<StockAlertResource> alerts(
+      @PathVariable UUID inventoryId,
+      @Parameter(description = "OPEN or RESOLVED; every alert when absent")
+          @RequestParam(required = false)
+          StockAlertStatus status,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    var query =
+        new GetStockAlertsQuery(
+            new InventoryId(inventoryId), new OrganizationId(user.organizationId()), status);
+    return stockAlerts.handle(query).stream()
+        .map(
+            alert ->
+                new StockAlertResource(
+                    alert.id().value(),
+                    alert.resourceId().value(),
+                    alert.resourceName(),
+                    alert.status(),
+                    alert.availableQuantity(),
+                    alert.minimumStock(),
+                    alert.raisedAt(),
+                    alert.resolvedAt().orElse(null)))
+        .toList();
   }
 
   @PostMapping("/{inventoryId}/resources")
