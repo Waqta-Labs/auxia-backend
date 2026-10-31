@@ -1,9 +1,12 @@
 package com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.InsufficientScoringDataException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.ManualPriorityReasonRequiredException;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AuthorityId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ManualPriority;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
@@ -31,6 +34,7 @@ public final class Zone {
   private ZoneStatus status;
   private UrgencyScore urgencyScore;
   private LocalDateTime lastAidReceivedAt;
+  private ManualPriority manualPriority;
 
   private Zone(
       ZoneId id,
@@ -41,7 +45,8 @@ public final class Zone {
       DamageLevel damageLevel,
       ZoneStatus status,
       UrgencyScore urgencyScore,
-      LocalDateTime lastAidReceivedAt) {
+      LocalDateTime lastAidReceivedAt,
+      ManualPriority manualPriority) {
     this.id = Objects.requireNonNull(id, "id");
     this.emergencyId = Objects.requireNonNull(emergencyId, "emergencyId");
     this.name = requireText(name);
@@ -51,6 +56,7 @@ public final class Zone {
     this.status = Objects.requireNonNull(status, "status");
     this.urgencyScore = urgencyScore;
     this.lastAidReceivedAt = lastAidReceivedAt;
+    this.manualPriority = manualPriority;
   }
 
   /**
@@ -73,6 +79,7 @@ public final class Zone {
         damageLevel,
         ZoneStatus.REGISTERED,
         null,
+        null,
         null);
   }
 
@@ -81,6 +88,7 @@ public final class Zone {
    *
    * @param urgencyScore {@code null} while the score has not been calculated
    * @param lastAidReceivedAt {@code null} while no aid was delivered
+   * @param manualPriority {@code null} while no authority marked the zone as a priority
    */
   public static Zone reconstitute(
       ZoneId id,
@@ -91,7 +99,8 @@ public final class Zone {
       DamageLevel damageLevel,
       ZoneStatus status,
       UrgencyScore urgencyScore,
-      LocalDateTime lastAidReceivedAt) {
+      LocalDateTime lastAidReceivedAt,
+      ManualPriority manualPriority) {
     return new Zone(
         id,
         emergencyId,
@@ -101,7 +110,8 @@ public final class Zone {
         damageLevel,
         status,
         urgencyScore,
-        lastAidReceivedAt);
+        lastAidReceivedAt,
+        manualPriority);
   }
 
   public boolean belongsTo(EmergencyId emergencyId) {
@@ -155,6 +165,31 @@ public final class Zone {
    */
   public void updatePopulationImpact(PopulationImpact populationImpact) {
     this.populationImpact = Objects.requireNonNull(populationImpact, "populationImpact");
+  }
+
+  /**
+   * Marks the zone as a priority by hand, with its justification (US-07). It stays apart from the
+   * score, which keeps being calculated; a new mark replaces the previous one.
+   *
+   * @throws ManualPriorityReasonRequiredException if the justification is blank
+   */
+  public void prioritizeManually(AuthorityId setBy, String reason, LocalDateTime setAt) {
+    if (reason == null || reason.isBlank()) {
+      throw new ManualPriorityReasonRequiredException(id);
+    }
+    manualPriority = new ManualPriority(setBy, setAt, reason.strip());
+  }
+
+  public void removeManualPriority() {
+    manualPriority = null;
+  }
+
+  public boolean isPrioritizedManually() {
+    return manualPriority != null;
+  }
+
+  public Optional<ManualPriority> manualPriority() {
+    return Optional.ofNullable(manualPriority);
   }
 
   /**

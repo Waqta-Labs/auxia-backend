@@ -19,4 +19,6 @@ public record ZoneRankingItemResource(
         Double score,
     PriorityLevel priorityLevel,
     @Schema(description = "Needs mentioned in the processed field reports of the zone")
-        Set<Need> needs) {}
+        Set<Need> needs,
+    @Schema(description = "Not null when an authority prioritized the zone by hand (US-07)")
+        ManualPriorityResource manualPriority) {}

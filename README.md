@@ -82,6 +82,15 @@ src/main/java/com/waqtalabs/auxia/
 │   └── infrastructure/
 │       ├── persistence/jpa/
 │       └── security/                # JWT issue and check, BCrypt, filter chain
+├── citizentransparency/
+│   ├── domain/                      # read models ZonePublicStatus and EmergencyPublicView
+│   ├── application/                 # projection handlers, PublicStatusQueryService
+│   ├── interfaces/
+│   │   ├── rest/                    # PublicStatusController, no sign-in
+│   │   └── events/                  # consumers of Emergency Management and Traceability
+│   └── infrastructure/
+│       ├── persistence/jpa/
+│       └── web/                     # Cache-Control of the public answers
 └── shared/
     ├── domain/                      # error categories (404, 409, 422) and DomainEvent
     ├── application/                 # DomainEventPublisher, ExternalServiceUnavailable (503)
@@ -149,6 +158,8 @@ application starts.
 | V3 | `field_reports.emergency_id`; `zone_id` becomes optional, so a report can be pending zone assignment (US-01). |
 | V4 | `distribution_plans`: organization, coverage and the last modification (who, when, why); `distribution_items.recommended_quantity`, so the original recommendation survives a modification (US-13, US-14). |
 | V5 | `deliveries.organization_id`; a `REGISTERED` delivery keeps its `transaction_hash` from the moment it is sent, while its anchoring is `PENDING`. |
+| V6 | Projects once, into `citizen_transparency`, the emergencies and zones that existed before the public view, with the stage of their latest plan and delivery. |
+| V7 | `field_reports`: the indicators corrected by an authority, next to those of the NLP, with who, when and why (US-03). `zones`: the manual priority with who, when and why (US-07). |
 | V8 | `stock_alerts`: low stock alerts, one open at most per resource (US-10). |
 
 Neon already had the schema of V1 when Flyway was added, so on Neon V1 is
@@ -248,6 +259,9 @@ any signed-in user; changes need a role (see [Roles](#roles)).
 | `GET /api/v1/field-reports/{id}` | One report, with its structured data. |
 | `POST /api/v1/field-reports/{id}/structure` | Structure a report that is not processed yet (US-02). |
 | `PATCH /api/v1/field-reports/{id}/zone` | Assign the zone of a pending report. |
+| `PATCH /api/v1/field-reports/{id}/structured-data` | Correct or complete the indicators of a structured report, with a reason (US-03). |
+| `PUT /api/v1/zones/{id}/manual-priority` | Mark a zone as a priority by hand, with a justification (US-07). |
+| `DELETE /api/v1/zones/{id}/manual-priority` | Take the manual priority off a zone. |
 
 A field report always belongs to an emergency. Registered in an emergency
 without `zoneId`, its zone is identified from the text: when exactly one zone
@@ -402,6 +416,34 @@ authority assigns it (US-01, scenario 2).
   `verified: false`. A code of no registered delivery answers 404, and 503 if
   the blockchain does not answer.
 
+### Public view (Citizen Transparency)
+
+| Method and path | Description |
+|---|---|
+| `GET /api/v1/public/emergencies` | Every emergency, the most recent first. |
+| `GET /api/v1/public/emergencies/{id}/zones` | Zones of an emergency with their stage, by name. |
+| `GET /api/v1/public/zones/{id}` | Stage of a zone and its delivery history (US-24, US-25). |
+| `GET /api/v1/public/zones?district=&name=` | Zones of a district, optionally by part of their name, ignoring case. |
+
+- No sign-in. The answers carry `Cache-Control: public, max-age=60`, so a CDN or
+  the browser answers repeated queries: a change of stage shows, at most, a
+  minute later (R-04).
+- Stages: `REGISTERED`, `PRIORITIZED` (it has a score), `AID_APPROVED`,
+  `AID_IN_TRANSIT` (its brigade is on the way) and `AID_DELIVERED`. Within one
+  plan a zone only moves forward, even if an event arrives late or twice; a new
+  plan starts again from `AID_APPROVED`. A rejected plan changes nothing.
+- The history shows how many deliveries the zone received, the date of the last
+  one and whether it is `VERIFIED` or `PENDING_VERIFICATION` in the blockchain.
+  A verified last delivery adds `verificationUrl`, the public verification of
+  Traceability, whose code is the identifier of the delivery (US-26).
+- Never shown: personal data, evidence, the urgency score, the ranking or the
+  delivered resources; crossed between zones they would reveal the internal
+  prioritization (TS-C02, R-04). A zone not registered yet answers 404.
+- The view is a read model: Citizen Transparency projects the public events of
+  Emergency Management (`EmergencyRegistered`, `ZoneRegistered`, the score,
+  `DistributionPlanApproved`) and of Traceability (`DeliveryInitiated`,
+  `DeliveryConfirmed`, `DeliveryCertified`) after their commit.
+
 ### Identity Access
 
 | Method and path | Description |
@@ -451,6 +493,12 @@ decides what to send and when (TS-C04).
   of a zone is recalculated when the zone is registered, when one of its
   reports is structured and when a pending report is assigned to it. Each step
   runs after the commit, in its own transaction.
+- **Manual corrections.** An authority corrects or completes the indicators of a
+  structured report with a reason (US-03). The corrected values are used from
+  then on and the score of the zone is calculated again; the report keeps the
+  values of the NLP under `correction.originalData`, with who corrected them,
+  when and why. A zone marked as a priority by hand, with its justification,
+  goes first in the ranking and shows `manualPriority` (US-07).
 - **Most severe data.** The score receives, for each variable, the most severe
   value between the zone and its processed reports: the highest damage level,
   the largest counts and every need mentioned. The data registered for the zone

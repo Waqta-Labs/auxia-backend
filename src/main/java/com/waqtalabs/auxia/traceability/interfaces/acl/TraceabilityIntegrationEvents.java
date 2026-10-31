@@ -1,6 +1,8 @@
 package com.waqtalabs.auxia.traceability.interfaces.acl;
 
+import com.waqtalabs.auxia.traceability.domain.events.DeliveryCertified;
 import com.waqtalabs.auxia.traceability.domain.events.DeliveryConfirmed;
+import com.waqtalabs.auxia.traceability.domain.events.DeliveryInitiated;
 import com.waqtalabs.auxia.traceability.interfaces.acl.DeliveryConfirmedIntegrationEvent.DeliveredItem;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.context.event.EventListener;
@@ -18,6 +20,21 @@ class TraceabilityIntegrationEvents {
 
   TraceabilityIntegrationEvents(ApplicationEventPublisher publisher) {
     this.publisher = publisher;
+  }
+
+  @EventListener
+  void on(DeliveryInitiated event) {
+    publisher.publishEvent(
+        new DeliveryInitiatedIntegrationEvent(
+            event.deliveryId().value(),
+            event.distributionPlanId().value(),
+            event.zoneId().value()));
+  }
+
+  @EventListener
+  void on(DeliveryCertified event) {
+    publisher.publishEvent(
+        new DeliveryCertifiedIntegrationEvent(event.deliveryId().value(), event.zoneId().value()));
   }
 
   @EventListener
