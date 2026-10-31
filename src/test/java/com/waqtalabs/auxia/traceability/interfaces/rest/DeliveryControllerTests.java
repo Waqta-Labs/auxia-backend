@@ -205,6 +205,9 @@ class DeliveryControllerTests {
     register(organization.fieldBrigade(), "{\"items\": []}", photo())
         .andExpect(status().isBadRequest())
         .andExpect(jsonPath("$.errors[*].field").value(hasSize(2)));
+    register(organization.fieldBrigade(), delivery(plan.water(), 0), photo())
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[*].field").value(contains("items[0].quantity")));
   }
 
   @Test
