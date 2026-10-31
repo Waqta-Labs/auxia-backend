@@ -205,6 +205,33 @@ class ZoneTests {
   }
 
   @Test
+  void responsibleAuthorityChangesHandsAndIsKept() {
+    var registeredBy = new AuthorityId(UUID.randomUUID());
+    var nextShift = new AuthorityId(UUID.randomUUID());
+    Zone zone = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
+    assertThat(zone.responsibleAuthority()).isEmpty();
+
+    zone.assignResponsible(registeredBy);
+    zone.assignResponsible(nextShift);
+
+    assertThat(zone.responsibleAuthority()).contains(nextShift);
+    Zone stored =
+        Zone.reconstitute(
+            zone.id(),
+            zone.emergencyId(),
+            zone.name(),
+            null,
+            zone.populationImpact(),
+            zone.damageLevel(),
+            zone.status(),
+            null,
+            null,
+            null,
+            nextShift);
+    assertThat(stored.responsibleAuthority()).contains(nextShift);
+  }
+
+  @Test
   void reconstitutedZoneKeepsItsStatus() {
     Zone stored = emergency.registerZone("Sector Alto Perú", null, IMPACT, DamageLevel.SEVERE);
 

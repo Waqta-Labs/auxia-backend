@@ -74,6 +74,16 @@ public record SignedInOrganization(
         signIn(mockMvc, auditorEmail));
   }
 
+  /** Another AUTHORITY of the organization, signed in: the next responsible of a shift. */
+  public SignedInUser anotherAuthority(MockMvc mockMvc) throws Exception {
+    String email = uniqueEmail();
+    UUID id = registerUser(mockMvc, administratorToken, organizationId, email, "AUTHORITY");
+    return new SignedInUser(id, bearer(signIn(mockMvc, email)));
+  }
+
+  /** A user who signed in, with the processor that adds its token to a request. */
+  public record SignedInUser(UUID id, RequestPostProcessor token) {}
+
   public RequestPostProcessor administrator() {
     return bearer(administratorToken);
   }
