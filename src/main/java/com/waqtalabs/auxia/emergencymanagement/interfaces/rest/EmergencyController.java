@@ -5,7 +5,9 @@ import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.Regis
 import com.waqtalabs.auxia.emergencymanagement.application.commands.CloseEmergencyCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetActiveEmergenciesQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetEmergencyByIdQuery;
+import com.waqtalabs.auxia.emergencymanagement.application.queries.GetSinpadExportQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.EmergencyQueryService;
+import com.waqtalabs.auxia.emergencymanagement.application.queryservices.SinpadExportQueryService;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Emergency;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.assemblers.EmergencyResourceAssembler;
@@ -16,8 +18,12 @@ import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.util.List;
 import java.util.UUID;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,14 +42,17 @@ public class EmergencyController {
   private final RegisterEmergencyCommandHandler registerEmergency;
   private final CloseEmergencyCommandHandler closeEmergency;
   private final EmergencyQueryService emergencyQueries;
+  private final SinpadExportQueryService sinpadExports;
 
   public EmergencyController(
       RegisterEmergencyCommandHandler registerEmergency,
       CloseEmergencyCommandHandler closeEmergency,
-      EmergencyQueryService emergencyQueries) {
+      EmergencyQueryService emergencyQueries,
+      SinpadExportQueryService sinpadExports) {
     this.registerEmergency = registerEmergency;
     this.closeEmergency = closeEmergency;
     this.emergencyQueries = emergencyQueries;
+    this.sinpadExports = sinpadExports;
   }
 
   @PreAuthorize("hasRole('AUTHORITY')")
@@ -73,6 +82,30 @@ public class EmergencyController {
   public EmergencyResource findById(@PathVariable UUID emergencyId) {
     return EmergencyResourceAssembler.toResource(
         emergencyQueries.handle(new GetEmergencyByIdQuery(new EmergencyId(emergencyId))));
+  }
+
+  @GetMapping("/{emergencyId}/sinpad-export")
+  @Operation(
+      summary = "Export the field reports of an emergency for SINPAD",
+      description =
+          "A CSV file with one row per field report and the fields SINPAD requires, to upload"
+              + " it without registering the reports twice (US-33). Corrected indicators are"
+              + " used. If a report lacks a required field (zone, damage level, people or"
+              + " families affected), nothing is exported and incompleteReports lists each one"
+              + " with its missing fields.")
+  @ApiResponse(responseCode = "200", description = "CSV for SINPAD")
+  @ApiResponse(
+      responseCode = "404",
+      description = "The emergency does not exist or has no field reports")
+  @ApiResponse(responseCode = "422", description = "Reports with required fields missing")
+  public ResponseEntity<byte[]> exportToSinpad(@PathVariable UUID emergencyId) {
+    byte[] csv = sinpadExports.handle(new GetSinpadExportQuery(new EmergencyId(emergencyId)));
+    var disposition =
+        ContentDisposition.attachment().filename("sinpad-" + emergencyId + ".csv").build();
+    return ResponseEntity.ok()
+        .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
+        .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+        .body(csv);
   }
 
   @PreAuthorize("hasRole('AUTHORITY')")

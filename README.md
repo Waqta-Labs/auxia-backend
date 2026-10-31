@@ -246,6 +246,7 @@ any signed-in user; changes need a role (see [Roles](#roles)).
 | `GET /api/v1/emergencies` | Active emergencies, from the most recent. |
 | `GET /api/v1/emergencies/{id}` | One emergency. |
 | `PATCH /api/v1/emergencies/{id}/close` | Close an emergency. It no longer accepts zones. |
+| `GET /api/v1/emergencies/{id}/sinpad-export` | CSV of the field reports for SINPAD (US-33); 422 lists the reports with required fields missing. |
 | `POST /api/v1/emergencies/{emergencyId}/zones` | Register a zone of an active emergency. The authority who registers it is its responsible. |
 | `GET /api/v1/emergencies/{emergencyId}/zones` | Urgency ranking of the zones (US-06). Filters: `minScore`, `maxScore`, `need`. |
 | `GET /api/v1/zones/{id}` | One zone, with its score and priority level. |
@@ -272,6 +273,16 @@ without `zoneId`, its zone is identified from the text: when exactly one zone
 name of the emergency appears in it (ignoring case and accents), the report is
 associated to that zone; otherwise it stays pending zone assignment until the
 authority assigns it (US-01, scenario 2).
+
+The SINPAD export has one row per field report, from the oldest, with the
+emergency, its type, department, province and district, its start date, the
+zone, the date and source of the report, the damage level, the people, families,
+children, elderly people and people with disabilities affected, and the needs.
+Values are in Spanish and the file is UTF-8 with a byte order mark, so Excel
+opens it well. The zone, the damage level, the people and the families affected
+are required: if a report lacks one, nothing is exported and the 422 lists
+`incompleteReports`, each with its `fieldReportId` and `missingFields`. An
+emergency without reports answers 404.
 
 Every decision of an authority on a zone is added to its history in the same
 transaction (US-20): the registration of the zone, the modification, approval or
@@ -396,6 +407,7 @@ otherwise).
 |---|---|
 | `GET /api/v1/deliveries?zoneId=` | Deliveries of a zone, from the most recent. |
 | `GET /api/v1/deliveries/{id}` | One delivery with its items, evidence (by hash) and anchoring. |
+| `GET /api/v1/deliveries/report?zoneId=&from=&to=` | PDF of the deliveries of a zone, a period or both, for an audit (US-19). |
 | `POST /api/v1/deliveries/{id}/registration` | Register the delivery with its evidence (US-15, TS-05). `multipart/form-data`: a `delivery` part in JSON and one `evidences` part per file. |
 | `GET /api/v1/deliveries/{id}/verify` | Public: compare the hash of the delivery as it is now with the one in the blockchain (US-17). |
 
@@ -429,6 +441,13 @@ otherwise).
   `getDeliveryHash`. A changed quantity or a replaced photo gives
   `verified: false`. A code of no registered delivery answers 404, and 503 if
   the blockchain does not answer.
+- The report of deliveries lists, from the oldest, the registered and certified
+  deliveries of the organization: public code, date, resources with their names
+  in the inventory, record hash, transaction and verification status (verified,
+  pending verification, or anchoring failed and retried), with the path that
+  verifies each one. `zoneId`, `from` and `to` are optional, and both days of
+  the period are included. Without deliveries it answers 404, and 422 if the
+  period ends before it starts. It is in the language of `Accept-Language`.
 
 ### Public view (Citizen Transparency)
 

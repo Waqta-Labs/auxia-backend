@@ -8,7 +8,9 @@ import com.waqtalabs.auxia.traceability.application.commands.RegisterDeliveryCom
 import com.waqtalabs.auxia.traceability.application.commands.RegisterDeliveryCommand.EvidenceFile;
 import com.waqtalabs.auxia.traceability.application.queries.GetDeliveriesByZoneIdQuery;
 import com.waqtalabs.auxia.traceability.application.queries.GetDeliveryByIdQuery;
+import com.waqtalabs.auxia.traceability.application.queries.GetDeliveryReportQuery;
 import com.waqtalabs.auxia.traceability.application.queryservices.DeliveryQueryService;
+import com.waqtalabs.auxia.traceability.application.queryservices.DeliveryReportQueryService;
 import com.waqtalabs.auxia.traceability.domain.model.valueobjects.DeliveryId;
 import com.waqtalabs.auxia.traceability.domain.model.valueobjects.GeoPoint;
 import com.waqtalabs.auxia.traceability.domain.model.valueobjects.OrganizationId;
@@ -25,9 +27,14 @@ import io.swagger.v3.oas.annotations.tags.Tag;
 import jakarta.validation.Valid;
 import java.io.IOException;
 import java.io.UncheckedIOException;
+import java.time.LocalDate;
 import java.util.List;
 import java.util.Optional;
 import java.util.UUID;
+import org.springframework.context.i18n.LocaleContextHolder;
+import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.http.ContentDisposition;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
@@ -56,11 +63,15 @@ public class DeliveryController {
 
   private final RegisterDeliveryCommandHandler registerDelivery;
   private final DeliveryQueryService deliveryQueries;
+  private final DeliveryReportQueryService deliveryReports;
 
   public DeliveryController(
-      RegisterDeliveryCommandHandler registerDelivery, DeliveryQueryService deliveryQueries) {
+      RegisterDeliveryCommandHandler registerDelivery,
+      DeliveryQueryService deliveryQueries,
+      DeliveryReportQueryService deliveryReports) {
     this.registerDelivery = registerDelivery;
     this.deliveryQueries = deliveryQueries;
+    this.deliveryReports = deliveryReports;
   }
 
   @GetMapping
@@ -73,6 +84,44 @@ public class DeliveryController {
         .stream()
         .map(DeliveryResourceAssembler::toResource)
         .toList();
+  }
+
+  @GetMapping("/report")
+  @Operation(
+      summary = "Export the history of deliveries as PDF",
+      description =
+          "Deliveries of the organization that happened, of a zone, a period or both, from the"
+              + " oldest: date, resources, record hash, transaction and verification status, to"
+              + " support the aid in an audit (US-19). Both days of the period are included. The"
+              + " document is in the language of Accept-Language.")
+  @ApiResponse(responseCode = "200", description = "PDF of the deliveries")
+  @ApiResponse(responseCode = "404", description = "No delivery in the zone or period")
+  @ApiResponse(responseCode = "422", description = "The period ends before it starts")
+  public ResponseEntity<byte[]> exportReport(
+      @Parameter(description = "Only the deliveries of this zone") @RequestParam(required = false)
+          UUID zoneId,
+      @Parameter(description = "First day, such as 2026-03-15")
+          @RequestParam(required = false)
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate from,
+      @Parameter(description = "Last day, included")
+          @RequestParam(required = false)
+          @DateTimeFormat(iso = DateTimeFormat.ISO.DATE)
+          LocalDate to,
+      @AuthenticationPrincipal AuthenticatedUser user) {
+    byte[] pdf =
+        deliveryReports.handle(
+            new GetDeliveryReportQuery(
+                organizationOf(user),
+                zoneId == null ? null : new ZoneId(zoneId),
+                from,
+                to,
+                LocaleContextHolder.getLocale()));
+    var disposition = ContentDisposition.attachment().filename("deliveries.pdf").build();
+    return ResponseEntity.ok()
+        .contentType(MediaType.APPLICATION_PDF)
+        .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
+        .body(pdf);
   }
 
   @GetMapping("/{deliveryId}")

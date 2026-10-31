@@ -7,6 +7,8 @@ import com.waqtalabs.auxia.traceability.domain.model.valueobjects.DistributionPl
 import com.waqtalabs.auxia.traceability.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.traceability.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.traceability.domain.repositories.DeliveryRepository;
+import java.time.LocalDateTime;
+import java.util.EnumSet;
 import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -54,6 +56,22 @@ class JpaDeliveryRepository implements DeliveryRepository {
     return repository
         .findByZoneIdAndOrganizationIdOrderByCreatedAtDesc(zoneId.value(), organizationId.value())
         .stream()
+        .map(DeliveryJpaMapper::toDomain)
+        .toList();
+  }
+
+  /** The zone and the period are filtered here: an organization has few deliveries. */
+  @Override
+  @Transactional(readOnly = true)
+  public List<Delivery> findCompleted(
+      OrganizationId organizationId, ZoneId zoneId, LocalDateTime from, LocalDateTime to) {
+    return repository
+        .findByOrganizationIdAndStatusInOrderByDeliveredAtAsc(
+            organizationId.value(), EnumSet.of(DeliveryStatus.REGISTERED, DeliveryStatus.CERTIFIED))
+        .stream()
+        .filter(entity -> zoneId == null || entity.zoneId.equals(zoneId.value()))
+        .filter(entity -> from == null || !entity.deliveredAt.isBefore(from))
+        .filter(entity -> to == null || entity.deliveredAt.isBefore(to))
         .map(DeliveryJpaMapper::toDomain)
         .toList();
   }
