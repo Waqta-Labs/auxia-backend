@@ -51,6 +51,9 @@ class SecurityConfiguration {
                     // Anyone can verify a delivery with its public code (US-17, US-26).
                     .requestMatchers(HttpMethod.GET, "/api/v1/deliveries/*/verify")
                     .permitAll()
+                    // Public view for citizens (EP-08).
+                    .requestMatchers(HttpMethod.GET, "/api/v1/public/**")
+                    .permitAll()
                     .requestMatchers(
                         "/swagger-ui.html",
                         "/swagger-ui/**",

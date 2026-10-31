@@ -44,7 +44,7 @@ public class RegisterZoneCommandHandler {
             command.populationImpact(),
             command.damageLevel());
     Zone saved = zoneRepository.save(zone);
-    eventPublisher.publish(new ZoneRegistered(saved.id()));
+    eventPublisher.publish(new ZoneRegistered(saved.id(), saved.emergencyId(), saved.name()));
     return saved;
   }
 }

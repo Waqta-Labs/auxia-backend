@@ -23,6 +23,7 @@ import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneRan
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportAssignedToZone;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportProcessed;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportRegistered;
+import com.waqtalabs.auxia.emergencymanagement.domain.events.UrgencyScoreCalculated;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.ZonePopulationImpactUpdated;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.ZoneRegistered;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportAlreadyProcessedException;
@@ -79,7 +80,7 @@ class UrgencyScoreUseCasesTests {
   private final UpdateZonePopulationImpactCommandHandler updateImpact =
       new UpdateZonePopulationImpactCommandHandler(zones, events::add);
   private final CalculateUrgencyScoreCommandHandler calculateScore =
-      new CalculateUrgencyScoreCommandHandler(zones, reports, aiService);
+      new CalculateUrgencyScoreCommandHandler(zones, reports, aiService, events::add);
   private final ZoneQueryService zoneQueries = new ZoneQueryService(emergencies, zones, reports);
   private final FieldReportQueryService reportQueries =
       new FieldReportQueryService(emergencies, zones, reports);
@@ -90,7 +91,8 @@ class UrgencyScoreUseCasesTests {
   void registeringAZonePublishesZoneRegistered() {
     Zone zone = zone("Sector Alto Perú", 600, 140, DamageLevel.SEVERE);
 
-    assertThat(events).containsExactly(new ZoneRegistered(zone.id()));
+    assertThat(events)
+        .containsExactly(new ZoneRegistered(zone.id(), emergency.id(), "Sector Alto Perú"));
   }
 
   @Test
@@ -168,6 +170,7 @@ class UrgencyScoreUseCasesTests {
                 DamageLevel.CRITICAL, 600, 35, 300, 90, 15, 0, Set.of(Need.WATER)));
     // 40 × 1 (CRITICAL) + 60 × 300 / 600
     assertThat(scored.urgencyScore().orElseThrow().value()).isEqualTo(70.0);
+    assertThat(events).endsWith(new UrgencyScoreCalculated(zone.id()));
     assertThat(scored.urgencyScore().orElseThrow().level()).isEqualTo(PriorityLevel.HIGH);
     assertThat(scored.status()).isEqualTo(ZoneStatus.PRIORITIZED);
     assertThat(zones.findById(zone.id()).orElseThrow().urgencyScore()).isPresent();
