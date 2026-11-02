@@ -18,6 +18,12 @@ spring:
     url: ${DB_URL}
     username: ${DB_USERNAME}
     password: ${DB_PASSWORD}
+    hikari:
+      # Neon suspends its compute when no connection is open, and bills the time it is awake.
+      # Idle connections close after a minute, so the database sleeps while nobody uses the API.
+      minimum-idle: 0
+      idle-timeout: 60000
+      maximum-pool-size: 5
   flyway:
     # One schema per bounded context; the history table lives in public.
     schemas: emergency_management, resource_management, traceability, identity_access, citizen_transparency
