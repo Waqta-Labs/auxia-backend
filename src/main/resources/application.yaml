@@ -1,0 +1,104 @@
+spring:
+  application:
+    name: auxia-backend
+  config:
+    # Local development: DB_* variables can live in a .env file (never committed).
+    import: optional:file:.env[.properties]
+  profiles:
+    default: dev
+  autoconfigure:
+    # No in-memory user with a generated password: Identity Access will provide the users.
+    exclude: org.springframework.boot.security.autoconfigure.UserDetailsServiceAutoConfiguration
+  messages:
+    basename: messages
+    encoding: UTF-8
+    # Unsupported languages get English, never the language of the server.
+    fallback-to-system-locale: false
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+  flyway:
+    # One schema per bounded context; the history table lives in public.
+    schemas: emergency_management, resource_management, traceability, identity_access, citizen_transparency
+    default-schema: public
+    # Neon already had the schema of V1 when Flyway was added: on that database V1 is recorded
+    # as the baseline instead of running. An empty database runs every migration from V1.
+    baseline-on-migrate: true
+    baseline-version: 1
+    baseline-description: schema of the project report
+  servlet:
+    multipart:
+      # Evidence of a delivery (TS-05): a few photos or documents per registration.
+      max-file-size: 10MB
+      max-request-size: 50MB
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Flyway owns the schema; Hibernate only checks that the entities match it.
+      ddl-auto: validate
+
+auxia:
+  security:
+    # Secret of the platform operator to register and suspend organizations (X-Platform-Key).
+    platform-admin-key: ${PLATFORM_ADMIN_KEY}
+    jwt:
+      # Base64 secrets of at least 32 bytes by key id. To rotate, add a key and make it active.
+      keys:
+        k1: ${AUTH_JWT_SECRET}
+      active-key-id: k1
+      expiration: 8h
+  ai-service:
+    # auxia-ai-service structures field reports and calculates urgency scores (TS-C04).
+    # Its key must be the same AI_SERVICE_API_KEY that the AI Service expects.
+    base-url: ${AI_SERVICE_URL:http://localhost:8765}
+    api-key: ${AI_SERVICE_API_KEY}
+  evidence-storage:
+    # Azure Blob Storage, or Azurite for local development (see the README).
+    connection-string: ${AZURE_STORAGE_CONNECTION_STRING}
+    container: ${AZURE_STORAGE_CONTAINER:evidences}
+  blockchain:
+    # DeliveryRegistry on Sepolia (auxia-smart-contracts/deployments/sepolia.json). The private
+    # key is the one of the wallet that owns the contract: only it can register deliveries.
+    rpc-url: ${BLOCKCHAIN_RPC_URL}
+    private-key: ${BLOCKCHAIN_PRIVATE_KEY}
+    contract-address: ${BLOCKCHAIN_CONTRACT_ADDRESS:0xe678347E182cbf00031401C97284AaB1C6b8148c}
+    chain-id: ${BLOCKCHAIN_CHAIN_ID:11155111}
+  traceability:
+    anchoring:
+      # In the background, so the brigade does not wait for a block.
+      asynchronous: true
+      # Deliveries not anchored yet are tried again this often, up to max-attempts transactions.
+      retry-enabled: true
+      retry-interval: 5m
+      max-attempts: 10
+
+info:
+  app:
+    name: AuxIA Backend API
+    version: '@project.version@'
+
+springdoc:
+  # On in every profile, prod included: the deployed API is tried from Swagger UI.
+  api-docs:
+    enabled: true
+  swagger-ui:
+    enabled: true
+    path: /swagger-ui.html
+    tags-sorter: alpha
+    operations-sorter: method
+
+logging:
+  level:
+    # The JDK HTTP client sets Content-Length by itself, and the Azure SDK warns on every
+    # request that it cannot set it. The files are stored correctly.
+    com.azure.core.http.jdk.httpclient.JdkHttpClient: error
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health, info
+  info:
+    env:
+      enabled: true

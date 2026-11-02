@@ -1,0 +1,10 @@
+management:
+  endpoint:
+    health:
+      # Anyone sees whether the service is UP; the components (database, disk and its path)
+      # only a signed-in user, with a bearer token.
+      show-details: when-authorized
+
+logging:
+  level:
+    com.waqtalabs.auxia: debug
