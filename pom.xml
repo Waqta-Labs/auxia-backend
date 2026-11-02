@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.waqtalabs</groupId>
     <artifactId>auxia-backend</artifactId>
-    <version>0.1.0-SNAPSHOT</version>
+    <version>0.1.0</version>
     <name>auxia-backend</name>
     <description>AuxIA Backend API: modular monolith for humanitarian aid management</description>
     <properties>
