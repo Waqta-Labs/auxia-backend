@@ -2,7 +2,10 @@ package com.waqtalabs.auxia.emergencymanagement.interfaces.rest;
 
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.CloseEmergencyCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterEmergencyCommandHandler;
+import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.SubmitToSinpadCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.CloseEmergencyCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.commands.SubmitToSinpadCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.ports.SinpadGateway.SinpadRegistration;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetActiveEmergenciesQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetEmergencyByIdQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetSinpadExportQuery;
@@ -13,6 +16,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Emergen
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.assemblers.EmergencyResourceAssembler;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.EmergencyResource;
 import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.RegisterEmergencyRequest;
+import com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources.SinpadSubmissionResource;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
 import io.swagger.v3.oas.annotations.tags.Tag;
@@ -23,6 +27,7 @@ import java.util.List;
 import java.util.UUID;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.prepost.PreAuthorize;
@@ -43,16 +48,19 @@ public class EmergencyController {
   private final CloseEmergencyCommandHandler closeEmergency;
   private final EmergencyQueryService emergencyQueries;
   private final SinpadExportQueryService sinpadExports;
+  private final SubmitToSinpadCommandHandler submitToSinpad;
 
   public EmergencyController(
       RegisterEmergencyCommandHandler registerEmergency,
       CloseEmergencyCommandHandler closeEmergency,
       EmergencyQueryService emergencyQueries,
-      SinpadExportQueryService sinpadExports) {
+      SinpadExportQueryService sinpadExports,
+      SubmitToSinpadCommandHandler submitToSinpad) {
     this.registerEmergency = registerEmergency;
     this.closeEmergency = closeEmergency;
     this.emergencyQueries = emergencyQueries;
     this.sinpadExports = sinpadExports;
+    this.submitToSinpad = submitToSinpad;
   }
 
   @PreAuthorize("hasRole('AUTHORITY')")
@@ -106,6 +114,32 @@ public class EmergencyController {
         .contentType(new MediaType("text", "csv", StandardCharsets.UTF_8))
         .header(HttpHeaders.CONTENT_DISPOSITION, disposition.toString())
         .body(csv);
+  }
+
+  @PreAuthorize("hasRole('AUTHORITY')")
+  @PostMapping("/{emergencyId}/sinpad-submissions")
+  @Operation(
+      summary = "Send the field reports of an emergency to SINPAD",
+      description =
+          "The same reports and checks as the export file (US-33), sent to SINPAD by HTTP."
+              + " Sending the emergency again replaces its reports and keeps its registration"
+              + " number. INDECI has no public API, so by default they go to the SINPAD"
+              + " simulator of this backend (tag SINPAD simulator).")
+  @ApiResponse(responseCode = "201", description = "SINPAD received the reports")
+  @ApiResponse(
+      responseCode = "404",
+      description = "The emergency does not exist or has no field reports")
+  @ApiResponse(responseCode = "422", description = "Reports with required fields missing")
+  @ApiResponse(responseCode = "503", description = "SINPAD did not answer")
+  public ResponseEntity<SinpadSubmissionResource> submitToSinpad(@PathVariable UUID emergencyId) {
+    SinpadRegistration registration =
+        submitToSinpad.handle(new SubmitToSinpadCommand(new EmergencyId(emergencyId)));
+    return ResponseEntity.status(HttpStatus.CREATED)
+        .body(
+            new SinpadSubmissionResource(
+                registration.registrationCode(),
+                registration.reportsReceived(),
+                registration.receivedAt()));
   }
 
   @PreAuthorize("hasRole('AUTHORITY')")

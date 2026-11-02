@@ -59,6 +59,14 @@ auxia:
     # Its key must be the same AI_SERVICE_API_KEY that the AI Service expects.
     base-url: ${AI_SERVICE_URL:http://localhost:8765}
     api-key: ${AI_SERVICE_API_KEY}
+  sinpad:
+    # SINPAD of INDECI has no public API: by default the field reports go by HTTP to the SINPAD
+    # simulator of this same backend (/sinpad-simulator). SINPAD_URL points to another service.
+    base-url: ${SINPAD_URL:http://localhost:${server.port:8080}/sinpad-simulator}
+    # Key of AuxIA in SINPAD; the simulator expects the same one.
+    api-key: ${SINPAD_API_KEY:sinpad-simulator-local-key}
+    simulator:
+      enabled: ${SINPAD_SIMULATOR_ENABLED:true}
   evidence-storage:
     # Azure Blob Storage, or Azurite for local development (see the README).
     connection-string: ${AZURE_STORAGE_CONNECTION_STRING}
