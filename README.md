@@ -116,6 +116,9 @@ blockchain are configured with environment variables:
 | `DB_PASSWORD` | Database password |
 | `AI_SERVICE_URL` | URL of [auxia-ai-service](https://github.com/Waqta-Labs/auxia-ai-service). Default `http://localhost:8765` |
 | `AI_SERVICE_API_KEY` | Shared secret sent in `X-API-Key`. It must be the same `AI_SERVICE_API_KEY` of the AI Service. Required |
+| `SINPAD_URL` | URL of SINPAD, without `/api/v1`. Default the SINPAD simulator of this backend, `http://localhost:<port>/sinpad-simulator` |
+| `SINPAD_API_KEY` | Key of AuxIA in SINPAD, sent in `X-Api-Key`; the simulator expects the same one. Set a random value outside local development |
+| `SINPAD_SIMULATOR_ENABLED` | `false` turns off the simulator when `SINPAD_URL` points to a real service. Default `true` |
 | `AUTH_JWT_SECRET` | Base64 key that signs the access tokens, at least 32 bytes, e.g. `openssl rand -base64 32`. Required |
 | `PLATFORM_ADMIN_KEY` | Secret of the platform operator, sent in `X-Platform-Key` to register and suspend organizations. Required |
 | `MAIL_HOST` | SMTP server of the e-mail notifications, e.g. `smtp.gmail.com`. Without it, the e-mails are only logged |
@@ -259,6 +262,7 @@ any signed-in user; changes need a role (see [Roles](#roles)).
 | `GET /api/v1/emergencies/{id}` | One emergency. |
 | `PATCH /api/v1/emergencies/{id}/close` | Close an emergency. It no longer accepts zones. |
 | `GET /api/v1/emergencies/{id}/sinpad-export` | CSV of the field reports for SINPAD (US-33); 422 lists the reports with required fields missing. |
+| `POST /api/v1/emergencies/{id}/sinpad-submissions` | Sends the same reports to SINPAD by HTTP and returns its registration number (US-33). AUTHORITY only. |
 | `POST /api/v1/emergencies/{emergencyId}/zones` | Register a zone of an active emergency. The authority who registers it is its responsible. |
 | `GET /api/v1/emergencies/{emergencyId}/zones` | Urgency ranking of the zones (US-06). Filters: `minScore`, `maxScore`, `need`. |
 | `GET /api/v1/zones/{id}` | One zone, with its score and priority level. |
@@ -295,6 +299,19 @@ opens it well. The zone, the damage level, the people and the families affected
 are required: if a report lacks one, nothing is exported and the 422 lists
 `incompleteReports`, each with its `fieldReportId` and `missingFields`. An
 emergency without reports answers 404.
+
+The same reports, with the same checks, can be sent to SINPAD instead of
+uploading the file. INDECI has no public API for SINPAD, so the integration is
+validated against a **SINPAD simulator** that runs in this backend under
+`/sinpad-simulator` (Swagger tag *SINPAD simulator*) and that Emergency
+Management reaches only by HTTP, through `SINPAD_URL`, like any external
+system. The simulator takes the fields in Spanish, checks the required ones and
+the key in `X-Api-Key`, and answers a registration number such as
+`SINPAD-2026-000001`; sending the emergency again replaces its reports and keeps
+the number. It keeps the registrations in memory, so they are lost when the
+backend restarts. Pointing `SINPAD_URL` to a real service and setting
+`SINPAD_SIMULATOR_ENABLED=false` needs no change in the code. If SINPAD does not
+answer, the API answers 503.
 
 Every decision of an authority on a zone is added to its history in the same
 transaction (US-20): the registration of the zone, the modification, approval or

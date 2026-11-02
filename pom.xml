@@ -213,6 +213,8 @@
                     <systemPropertyVariables>
                         <!-- Tests never reach Neon: without Testcontainers, the connection fails. -->
                         <DB_URL>jdbc:postgresql://localhost:1/tests-use-testcontainers</DB_URL>
+                        <!-- Nor SINPAD: the tests that send reports reach the simulator by its port. -->
+                        <SINPAD_URL>http://localhost:1/tests-use-the-simulator-port</SINPAD_URL>
                         <!-- Nor the AI Service: tests replace its gateways or stub its responses. -->
                         <AI_SERVICE_URL>http://localhost:1/tests-use-stubs</AI_SERVICE_URL>
                         <AI_SERVICE_API_KEY>test-api-key-0123456789</AI_SERVICE_API_KEY>

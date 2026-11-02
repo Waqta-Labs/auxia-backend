@@ -67,6 +67,9 @@ class SecurityConfiguration {
                     // Public view for citizens (EP-08).
                     .requestMatchers(HttpMethod.GET, "/api/v1/public/**")
                     .permitAll()
+                    // The SINPAD simulator checks the key of the sender (X-Api-Key).
+                    .requestMatchers("/sinpad-simulator/**")
+                    .permitAll()
                     .requestMatchers(
                         "/swagger-ui.html",
                         "/swagger-ui/**",
