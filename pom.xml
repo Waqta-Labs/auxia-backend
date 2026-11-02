@@ -51,6 +51,10 @@
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
         <dependency>
@@ -214,6 +218,8 @@
                         <AI_SERVICE_API_KEY>test-api-key-0123456789</AI_SERVICE_API_KEY>
                         <AUTH_JWT_SECRET>YXV4aWEtdGVzdC1qd3Qtc2VjcmV0LTAxMjM0NTY3ODk=</AUTH_JWT_SECRET>
                         <PLATFORM_ADMIN_KEY>test-platform-key-0123456789</PLATFORM_ADMIN_KEY>
+                        <!-- Nor an SMTP server: e-mails are only logged, even with MAIL_* in .env. -->
+                        <MAIL_ENABLED>false</MAIL_ENABLED>
                         <!-- Nor a blockchain: tests replace the ledger. The key is the first
                              public test account of Hardhat, which holds nothing real. -->
                         <BLOCKCHAIN_RPC_URL>http://localhost:1/tests-use-a-fake-ledger</BLOCKCHAIN_RPC_URL>
