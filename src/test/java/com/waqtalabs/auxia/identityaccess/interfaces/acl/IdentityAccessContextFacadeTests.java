@@ -77,6 +77,28 @@ class IdentityAccessContextFacadeTests {
     assertThat(facade.isActiveUserWithRole(UUID.randomUUID(), "AUTHORITY")).isFalse();
   }
 
+  @Test
+  void notificationsReachOnlyActiveUsersWithTheRoles() {
+    Organization organization = organization();
+    UserAccount administrator = user(organization, Role.ORGANIZATION_ADMIN);
+    UserAccount authority = user(organization, Role.AUTHORITY);
+    UserAccount disabled = user(organization, Role.AUTHORITY);
+    disabled.disable();
+    users.save(disabled);
+    user(organization(), Role.AUTHORITY);
+    UUID organizationId = organization.id().value();
+
+    assertThat(facade.getActiveUserEmails(organizationId, "AUTHORITY"))
+        .containsExactly(authority.email().value());
+    assertThat(facade.getActiveUserEmails(organizationId, "ORGANIZATION_ADMIN", "AUTHORITY"))
+        .containsExactlyInAnyOrder(administrator.email().value(), authority.email().value());
+    assertThat(facade.getActiveUserEmails(organizationId, "ROOT")).isEmpty();
+    assertThat(facade.getActiveUserEmail(authority.id().value()))
+        .contains(authority.email().value());
+    assertThat(facade.getActiveUserEmail(disabled.id().value())).isEmpty();
+    assertThat(facade.getActiveUserEmail(UUID.randomUUID())).isEmpty();
+  }
+
   private Organization organization() {
     String taxId = "20" + ThreadLocalRandom.current().nextLong(100_000_000L, 1_000_000_000L);
     return organizations.save(
