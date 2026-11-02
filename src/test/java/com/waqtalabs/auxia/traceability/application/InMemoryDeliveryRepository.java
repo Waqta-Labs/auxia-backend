@@ -17,6 +17,7 @@ import java.util.Optional;
 public class InMemoryDeliveryRepository implements DeliveryRepository {
 
   private final Map<DeliveryId, Delivery> deliveries = new LinkedHashMap<>();
+  private int pendingAnchoringReads;
 
   @Override
   public Delivery save(Delivery delivery) {
@@ -64,6 +65,12 @@ public class InMemoryDeliveryRepository implements DeliveryRepository {
 
   @Override
   public List<Delivery> findPendingAnchoring() {
+    pendingAnchoringReads++;
     return deliveries.values().stream().filter(Delivery::awaitsAnchoring).toList();
+  }
+
+  /** How many times the deliveries pending anchoring were read. */
+  public int pendingAnchoringReads() {
+    return pendingAnchoringReads;
   }
 }

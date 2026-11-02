@@ -339,6 +339,54 @@ class DeliveryUseCasesTests {
   }
 
   @Test
+  void schedulerStopsReadingTheDeliveriesWhenNoneIsLeftToRetry() {
+    var scheduler =
+        new PendingAnchoringScheduler(deliveries, anchor, Duration.ofMinutes(5), 10, CLOCK);
+
+    scheduler.retryPendingAnchoring();
+    scheduler.retryPendingAnchoring();
+
+    assertThat(deliveries.pendingAnchoringReads()).isEqualTo(1);
+  }
+
+  @Test
+  void schedulerReadsTheDeliveriesAgainOnceADeliveryIsConfirmed() {
+    var later = Clock.offset(CLOCK, Duration.ofMinutes(10));
+    var scheduler =
+        new PendingAnchoringScheduler(deliveries, anchor, Duration.ofMinutes(5), 10, later);
+    scheduler.retryPendingAnchoring();
+    ledger.becomeUnavailable();
+    Delivery registered = registered();
+    anchor.handle(new AnchorDeliveryCommand(registered.id()));
+    ledger.becomeAvailable();
+
+    events.stream()
+        .filter(DeliveryConfirmed.class::isInstance)
+        .map(DeliveryConfirmed.class::cast)
+        .forEach(scheduler::on);
+    scheduler.retryPendingAnchoring();
+
+    assertThat(deliveries.pendingAnchoringReads()).isEqualTo(2);
+    assertThat(deliveries.findById(registered.id()).orElseThrow().status())
+        .isEqualTo(DeliveryStatus.CERTIFIED);
+  }
+
+  @Test
+  void schedulerStopsReadingTheDeliveriesWhenItGaveUpOnThem() {
+    Delivery registered = registered();
+    ledger.willRevert();
+    anchor.handle(new AnchorDeliveryCommand(registered.id()));
+    var later = Clock.offset(CLOCK, Duration.ofMinutes(10));
+    var scheduler =
+        new PendingAnchoringScheduler(deliveries, anchor, Duration.ofMinutes(5), 1, later);
+
+    scheduler.retryPendingAnchoring();
+    scheduler.retryPendingAnchoring();
+
+    assertThat(deliveries.pendingAnchoringReads()).isEqualTo(1);
+  }
+
+  @Test
   void untouchedDeliveryIsVerified() {
     Delivery delivery = anchor.handle(new AnchorDeliveryCommand(registered().id()));
 
