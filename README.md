@@ -168,6 +168,12 @@ recorded as the baseline (`baseline-on-migrate`) and only V2 onwards run. An
 empty database runs every migration from V1. The history table is
 `public.flyway_schema_history`.
 
+Neon suspends its compute when no connection is open and bills the time it is
+awake. The connection pool keeps no idle connection (at most 5, each closed
+after a minute idle), so the database sleeps while nobody uses the API. A
+health probe that must not wake it, such as the one of the hosting platform,
+uses `/actuator/health/liveness`; `/actuator/health` checks the database.
+
 ### Profiles
 
 | Profile | Use |
@@ -434,7 +440,9 @@ otherwise).
   `CERTIFIED` when the transaction is confirmed (US-16). If the network fails
   or rejects it, the anchoring is `FAILED`, and it is retried every 5 minutes,
   up to 10 transactions. The transaction is kept from the moment it is sent, so
-  a retry checks it instead of sending the hash again.
+  a retry checks it instead of sending the hash again. Once nothing is left to
+  retry, the retry stops reading the database until the next delivery is
+  registered.
 - The verification needs no sign-in: the identifier of the delivery is its
   public code. It computes the hash again from the quantities in the database
   and the files read again from the storage, and compares it with
