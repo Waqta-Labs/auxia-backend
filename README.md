@@ -118,6 +118,11 @@ blockchain are configured with environment variables:
 | `AI_SERVICE_API_KEY` | Shared secret sent in `X-API-Key`. It must be the same `AI_SERVICE_API_KEY` of the AI Service. Required |
 | `AUTH_JWT_SECRET` | Base64 key that signs the access tokens, at least 32 bytes, e.g. `openssl rand -base64 32`. Required |
 | `PLATFORM_ADMIN_KEY` | Secret of the platform operator, sent in `X-Platform-Key` to register and suspend organizations. Required |
+| `MAIL_HOST` | SMTP server of the e-mail notifications, e.g. `smtp.gmail.com`. Without it, the e-mails are only logged |
+| `MAIL_PORT` | SMTP port with STARTTLS. Default `587` |
+| `MAIL_USERNAME` / `MAIL_PASSWORD` | SMTP account. With Gmail, the address and an app password (Google account → Security → App passwords) |
+| `MAIL_FROM` | Sender address. Default `MAIL_USERNAME`; Gmail always sends as the signed-in account |
+| `MAIL_ENABLED` | `false` only logs the e-mails, even with a server. Default `true`; the tests set `false` |
 | `AZURE_STORAGE_CONNECTION_STRING` | Connection string of the Azure Storage account of the evidence files (portal: Storage account → Access keys). Locally, the one of Azurite (below). Required |
 | `AZURE_STORAGE_CONTAINER` | Private container of the evidence files; created if it does not exist. Default `evidences` |
 | `BLOCKCHAIN_RPC_URL` | JSON-RPC URL of the network, e.g. the Sepolia URL of Alchemy. Required |
@@ -374,7 +379,8 @@ otherwise).
 - Every change of stock (a new resource, a restock, an adjustment, a
   reservation and its change, release or consumption) evaluates the alerts
   after its commit: a resource whose available quantity falls below its minimum
-  stock gets an `OPEN` alert, written to the log, and the alert is `RESOLVED`
+  stock gets an `OPEN` alert, e-mailed to the administrators (see
+  [Notifications](#notifications)), and the alert is `RESOLVED`
   when the resource is restocked above the minimum. A new fall raises a new
   alert.
 - The organization is the one of the signed-in user. An inventory of another
@@ -556,6 +562,18 @@ decides what to send and when (TS-C04).
   added, and the `modelVersion` that calculated it (US-05). The PDF of
   `GET /zones/{id}/report` includes them, in the language of `Accept-Language`
   (OpenPDF).
+
+## Notifications
+
+The Notification Service sends plain text e-mails, in Spanish, one per
+recipient. Sending runs apart from the request, and a failure is only logged:
+a notification never undoes the action that triggered it.
+
+| Event | Recipients |
+|---|---|
+| A resource falls below its minimum stock (US-10) | Administrators of the organization |
+| A distribution plan is approved | The authority who approved it and the administrators |
+| A delivery is certified on the blockchain | Authorities of the organization, with the link to the transaction |
 
 ## API conventions
 
