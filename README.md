@@ -124,6 +124,7 @@ blockchain are configured with environment variables:
 | `BLOCKCHAIN_PRIVATE_KEY` | Private key of the wallet that owns `DeliveryRegistry`: only it can register deliveries. It pays the gas of each anchoring (SepoliaETH). Required |
 | `BLOCKCHAIN_CONTRACT_ADDRESS` | Address of `DeliveryRegistry`. Default the Sepolia deployment, `0xe678347E182cbf00031401C97284AaB1C6b8148c` |
 | `BLOCKCHAIN_CHAIN_ID` | Network of the transactions. Default `11155111` (Sepolia) |
+| `CORS_ALLOWED_ORIGINS` | Origins of the web application that may call the API from the browser, separated by commas. Default `http://localhost:5173,http://localhost:3000` (Vite and Next.js dev servers) |
 
 For local development, copy `.env.example` to `.env` and fill in the values.
 The application imports `.env` from the working directory when it exists.
@@ -588,3 +589,8 @@ decides what to send and when (TS-C04).
   that cannot run the action answers 403, both as localized problem details.
   In Swagger UI, sign in with `POST /api/v1/auth/sign-in` and paste the token
   in **Authorize**.
+- **CORS.** Browsers may call `/api/**` only from the origins in
+  `CORS_ALLOWED_ORIGINS`; a preflight from any other origin answers 403. The
+  web app sends `Authorization`, `Content-Type` and `Accept-Language`, and can
+  read `Content-Disposition` and `Location`. The field app is not a browser and
+  is not affected.
