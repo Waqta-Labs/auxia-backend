@@ -6,6 +6,8 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Inventory;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.StockAlert;
 import com.waqtalabs.auxia.resourcemanagement.domain.repositories.InventoryRepository;
 import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage;
+import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage.Detail;
+import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage.Tone;
 import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailSender;
 import com.waqtalabs.auxia.shared.infrastructure.notifications.NotificationTexts;
 import java.util.HashSet;
@@ -56,11 +58,19 @@ class NotificationServiceGateway implements StockAlertNotifier {
         new EmailMessage(
             new HashSet<>(administrators),
             texts.get("notification.stockAlert.subject", alert.resourceName()),
-            texts.get(
-                "notification.stockAlert.body",
-                alert.resourceName(),
-                inventory.name(),
-                alert.availableQuantity(),
-                alert.minimumStock())));
+            Tone.ALERT,
+            texts.get("notification.stockAlert.title"),
+            texts.get("notification.stockAlert.intro", alert.resourceName(), inventory.name()),
+            List.of(
+                new Detail(texts.get("notification.stockAlert.resource"), alert.resourceName()),
+                new Detail(texts.get("notification.stockAlert.inventory"), inventory.name()),
+                new Detail(
+                    texts.get("notification.stockAlert.available"),
+                    String.valueOf(alert.availableQuantity())),
+                new Detail(
+                    texts.get("notification.stockAlert.minimum"),
+                    String.valueOf(alert.minimumStock()))),
+            null,
+            texts.get("notification.stockAlert.note")));
   }
 }

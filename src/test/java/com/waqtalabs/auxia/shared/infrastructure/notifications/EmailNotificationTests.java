@@ -14,6 +14,9 @@ import com.waqtalabs.auxia.FakeEmailConfiguration;
 import com.waqtalabs.auxia.SignedInOrganization;
 import com.waqtalabs.auxia.TestcontainersConfiguration;
 import com.waqtalabs.auxia.emergencymanagement.application.FakeAiService;
+import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage.Action;
+import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage.Detail;
+import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage.Tone;
 import com.waqtalabs.auxia.traceability.application.FakeBlockchainLedger;
 import java.nio.charset.StandardCharsets;
 import java.util.List;
@@ -86,9 +89,16 @@ class EmailNotificationTests {
     List<EmailMessage> sent = emails.withSubject("Stock bajo: " + resource);
     assertThat(sent).hasSize(1);
     assertThat(sent.getFirst().to()).containsExactly(email(organization, "ORGANIZATION_ADMIN"));
-    assertThat(sent.getFirst().body())
-        .contains(resource + " del inventario Almacén Lima bajó a 0")
-        .contains("stock mínimo de 50");
+    EmailMessage email = sent.getFirst();
+    assertThat(email.tone()).isEqualTo(Tone.ALERT);
+    assertThat(email.intro())
+        .isEqualTo(resource + " del inventario Almacén Lima está por debajo de su stock mínimo.");
+    assertThat(email.details())
+        .containsExactly(
+            new Detail("Recurso", resource),
+            new Detail("Inventario", "Almacén Lima"),
+            new Detail("Disponible", "0"),
+            new Detail("Stock mínimo", "50"));
   }
 
   @Test
@@ -103,11 +113,17 @@ class EmailNotificationTests {
         .containsExactlyInAnyOrder(
             email(plan.organization(), "ORGANIZATION_ADMIN"),
             email(plan.organization(), "AUTHORITY"));
-    assertThat(sent.getFirst().body())
-        .contains("Rosa Quispe aprobó el plan de distribución de la zona " + zone)
-        .contains("emergencia Huaico Chosica 2026")
-        .contains("Cobertura: total")
-        .contains(plan.planId());
+    EmailMessage email = sent.getFirst();
+    assertThat(email.tone()).isEqualTo(Tone.INFO);
+    assertThat(email.intro())
+        .isEqualTo("Rosa Quispe aprobó el plan de distribución de la zona " + zone + ".");
+    assertThat(email.details())
+        .containsExactly(
+            new Detail("Emergencia", "Huaico Chosica 2026"),
+            new Detail("Zona", zone),
+            new Detail("Aprobado por", "Rosa Quispe"),
+            new Detail("Cobertura", "Total"),
+            new Detail("Plan", plan.planId()));
   }
 
   @Test
@@ -161,10 +177,17 @@ class EmailNotificationTests {
     List<EmailMessage> sent = emails.withSubject("Entrega certificada en " + zone);
     assertThat(sent).hasSize(1);
     assertThat(sent.getFirst().to()).containsExactly(email(organization, "AUTHORITY"));
-    assertThat(sent.getFirst().body())
-        .contains("realizada el 2026-03-15 10:30, quedó certificada")
-        .contains("Entrega: " + deliveryId)
-        .contains("https://sepolia.etherscan.io/tx/" + transaction);
+    EmailMessage email = sent.getFirst();
+    assertThat(email.tone()).isEqualTo(Tone.SUCCESS);
+    assertThat(email.details())
+        .containsExactly(
+            new Detail("Zona", zone),
+            new Detail("Fecha de entrega", "2026-03-15 10:30"),
+            new Detail("Entrega", deliveryId),
+            new Detail("Transacción", transaction));
+    assertThat(email.action())
+        .isEqualTo(
+            new Action("Ver la transacción", "https://sepolia.etherscan.io/tx/" + transaction));
   }
 
   /** E-mail of the only user of the organization with the role. */

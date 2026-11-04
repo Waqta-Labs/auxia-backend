@@ -2,6 +2,9 @@ package com.waqtalabs.auxia.traceability.infrastructure.notifications;
 
 import com.waqtalabs.auxia.identityaccess.interfaces.acl.IdentityAccessContextFacade;
 import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage;
+import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage.Action;
+import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage.Detail;
+import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage.Tone;
 import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailSender;
 import com.waqtalabs.auxia.shared.infrastructure.notifications.NotificationTexts;
 import com.waqtalabs.auxia.traceability.application.ports.DeliveryCertificationNotifier;
@@ -48,11 +51,23 @@ class DeliveryCertificationNotificationGateway implements DeliveryCertificationN
         new EmailMessage(
             new HashSet<>(authorities),
             texts.get("notification.deliveryCertified.subject", delivery.zoneName()),
-            texts.get(
-                "notification.deliveryCertified.body",
-                delivery.zoneName(),
-                DATE_TIME.format(delivery.deliveredAt()),
-                delivery.deliveryId().value(),
-                explorerUrl + "/tx/" + delivery.transactionHash())));
+            Tone.SUCCESS,
+            texts.get("notification.deliveryCertified.title"),
+            texts.get("notification.deliveryCertified.intro", delivery.zoneName()),
+            List.of(
+                new Detail(texts.get("notification.deliveryCertified.zone"), delivery.zoneName()),
+                new Detail(
+                    texts.get("notification.deliveryCertified.deliveredAt"),
+                    DATE_TIME.format(delivery.deliveredAt())),
+                new Detail(
+                    texts.get("notification.deliveryCertified.delivery"),
+                    delivery.deliveryId().value().toString()),
+                new Detail(
+                    texts.get("notification.deliveryCertified.transaction"),
+                    delivery.transactionHash())),
+            new Action(
+                texts.get("notification.deliveryCertified.action"),
+                explorerUrl + "/tx/" + delivery.transactionHash()),
+            null));
   }
 }

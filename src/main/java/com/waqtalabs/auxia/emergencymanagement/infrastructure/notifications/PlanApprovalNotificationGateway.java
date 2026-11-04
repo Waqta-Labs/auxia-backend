@@ -3,6 +3,8 @@ package com.waqtalabs.auxia.emergencymanagement.infrastructure.notifications;
 import com.waqtalabs.auxia.emergencymanagement.application.ports.PlanApprovalNotifier;
 import com.waqtalabs.auxia.identityaccess.interfaces.acl.IdentityAccessContextFacade;
 import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage;
+import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage.Detail;
+import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailMessage.Tone;
 import com.waqtalabs.auxia.shared.infrastructure.notifications.EmailSender;
 import com.waqtalabs.auxia.shared.infrastructure.notifications.NotificationTexts;
 import java.util.HashSet;
@@ -48,12 +50,20 @@ class PlanApprovalNotificationGateway implements PlanApprovalNotifier {
         new EmailMessage(
             recipients,
             texts.get("notification.planApproved.subject", plan.zoneName()),
-            texts.get(
-                "notification.planApproved.body",
-                plan.zoneName(),
-                plan.emergencyName(),
-                approverName,
-                texts.get("notification.coverage." + plan.coverage().name()),
-                plan.planId().value())));
+            Tone.INFO,
+            texts.get("notification.planApproved.title"),
+            texts.get("notification.planApproved.intro", approverName, plan.zoneName()),
+            List.of(
+                new Detail(texts.get("notification.planApproved.emergency"), plan.emergencyName()),
+                new Detail(texts.get("notification.planApproved.zone"), plan.zoneName()),
+                new Detail(texts.get("notification.planApproved.approvedBy"), approverName),
+                new Detail(
+                    texts.get("notification.planApproved.coverage"),
+                    texts.get("notification.coverage." + plan.coverage().name())),
+                new Detail(
+                    texts.get("notification.planApproved.plan"),
+                    plan.planId().value().toString())),
+            null,
+            texts.get("notification.planApproved.note")));
   }
 }
