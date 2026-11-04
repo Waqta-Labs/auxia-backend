@@ -1,28 +1,35 @@
 package com.waqtalabs.auxia.shared.infrastructure.notifications;
 
+import jakarta.mail.MessagingException;
+import jakarta.mail.internet.MimeMessage;
+import java.io.UnsupportedEncodingException;
 import java.util.Properties;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.mail.MailException;
-import org.springframework.mail.SimpleMailMessage;
 import org.springframework.mail.javamail.JavaMailSenderImpl;
+import org.springframework.mail.javamail.MimeMessageHelper;
 
 /**
- * Sends the e-mails through an SMTP server with STARTTLS. Each e-mail goes in a virtual thread,
- * so the request that triggered it does not wait for the server.
+ * Sends the e-mails through an SMTP server with STARTTLS, as HTML with a plain text version and
+ * AuxIA as the name of the sender. Each e-mail goes in a virtual thread, so the request that
+ * triggered it does not wait for the server.
  */
 class SmtpEmailSender implements EmailSender, AutoCloseable {
 
   private static final Logger LOGGER = LoggerFactory.getLogger(SmtpEmailSender.class);
   private static final String TIMEOUT_MILLIS = "10000";
+  private static final String SENDER_NAME = "AuxIA";
 
   private final JavaMailSenderImpl mailSender;
   private final String from;
+  private final EmailTemplate template;
   private final ExecutorService executor = Executors.newVirtualThreadPerTaskExecutor();
 
-  SmtpEmailSender(EmailProperties properties) {
+  SmtpEmailSender(EmailProperties properties, EmailTemplate template) {
+    this.template = template;
     mailSender = new JavaMailSenderImpl();
     mailSender.setHost(properties.host());
     mailSender.setPort(properties.port());
@@ -49,16 +56,19 @@ class SmtpEmailSender implements EmailSender, AutoCloseable {
 
   /** One e-mail per recipient, so nobody sees the addresses of the others. */
   private void deliver(EmailMessage message) {
+    String html = template.html(message);
+    String text = template.text(message);
     for (String recipient : message.to()) {
-      var email = new SimpleMailMessage();
-      email.setFrom(from);
-      email.setTo(recipient);
-      email.setSubject(message.subject());
-      email.setText(message.body());
       try {
+        MimeMessage email = mailSender.createMimeMessage();
+        var helper = new MimeMessageHelper(email, true, "UTF-8");
+        helper.setFrom(from, SENDER_NAME);
+        helper.setTo(recipient);
+        helper.setSubject(message.subject());
+        helper.setText(text, html);
         mailSender.send(email);
         LOGGER.info("E-mail \"{}\" sent", message.subject());
-      } catch (MailException ex) {
+      } catch (MailException | MessagingException | UnsupportedEncodingException ex) {
         LOGGER.error("E-mail \"{}\" could not be sent", message.subject(), ex);
       }
     }

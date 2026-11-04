@@ -10,7 +10,9 @@ import org.springframework.context.annotation.Configuration;
 class EmailConfiguration {
 
   @Bean
-  EmailSender emailSender(EmailProperties properties) {
-    return properties.sendsEmails() ? new SmtpEmailSender(properties) : new LoggingEmailSender();
+  EmailSender emailSender(EmailProperties properties, NotificationTexts texts) {
+    return properties.sendsEmails()
+        ? new SmtpEmailSender(properties, new EmailTemplate(texts))
+        : new LoggingEmailSender();
   }
 }

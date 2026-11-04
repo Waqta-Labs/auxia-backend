@@ -1,5 +1,6 @@
 package com.waqtalabs.auxia.shared.infrastructure.notifications;
 
+import java.util.Locale;
 import org.springframework.context.MessageSource;
 import org.springframework.stereotype.Component;
 
@@ -20,5 +21,10 @@ public class NotificationTexts {
 
   public String get(String code, Object... arguments) {
     return messages.getMessage(code, arguments, properties.locale());
+  }
+
+  /** Language of the e-mails. */
+  public Locale locale() {
+    return properties.locale();
   }
 }
