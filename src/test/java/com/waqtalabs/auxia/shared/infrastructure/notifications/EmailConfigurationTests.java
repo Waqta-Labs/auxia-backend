@@ -4,6 +4,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 import java.util.Locale;
 import org.junit.jupiter.api.Test;
+import org.springframework.context.support.StaticMessageSource;
 
 class EmailConfigurationTests {
 
@@ -11,28 +12,31 @@ class EmailConfigurationTests {
 
   @Test
   void configuredServerSendsTheEmailsThroughSmtp() {
-    EmailSender sender = configuration.emailSender(properties(true, "smtp.gmail.com"));
+    EmailSender sender = emailSender(properties(true, "smtp.gmail.com"));
     assertThat(sender).isInstanceOf(SmtpEmailSender.class);
     ((SmtpEmailSender) sender).close();
   }
 
   @Test
   void withoutServerTheEmailsAreOnlyLogged() {
-    assertThat(configuration.emailSender(properties(true, "")))
-        .isInstanceOf(LoggingEmailSender.class);
-    assertThat(configuration.emailSender(properties(true, null)))
-        .isInstanceOf(LoggingEmailSender.class);
+    assertThat(emailSender(properties(true, ""))).isInstanceOf(LoggingEmailSender.class);
+    assertThat(emailSender(properties(true, null))).isInstanceOf(LoggingEmailSender.class);
   }
 
   @Test
   void disabledEmailsAreOnlyLoggedEvenWithServer() {
-    assertThat(configuration.emailSender(properties(false, "smtp.gmail.com")))
+    assertThat(emailSender(properties(false, "smtp.gmail.com")))
         .isInstanceOf(LoggingEmailSender.class);
   }
 
   @Test
   void textsAreInTheLanguageOfTheConfiguration() {
     assertThat(properties(true, "").locale()).isEqualTo(Locale.forLanguageTag("es-419"));
+  }
+
+  private EmailSender emailSender(EmailProperties properties) {
+    return configuration.emailSender(
+        properties, new NotificationTexts(new StaticMessageSource(), properties));
   }
 
   private static EmailProperties properties(boolean enabled, String host) {
