@@ -38,6 +38,23 @@ public record ApprovedPlan(
   /** The same plan, for a zone with another name. */
   public static ApprovedPlan prepare(MockMvc mockMvc, FakeAiService aiService, String zoneName)
       throws Exception {
+    return prepare(mockMvc, aiService, zoneName, null);
+  }
+
+  /** The same plan, for a zone with another name at these coordinates. */
+  public static ApprovedPlan prepareAt(
+      MockMvc mockMvc, FakeAiService aiService, String zoneName, double latitude, double longitude)
+      throws Exception {
+    return prepare(
+        mockMvc,
+        aiService,
+        zoneName,
+        "{\"latitude\": %s, \"longitude\": %s}".formatted(latitude, longitude));
+  }
+
+  private static ApprovedPlan prepare(
+      MockMvc mockMvc, FakeAiService aiService, String zoneName, String geolocation)
+      throws Exception {
     var organization = SignedInOrganization.register(mockMvc);
     var api = new Api(mockMvc, organization);
     String inventoryId = api.idOf(api.send(post("/api/v1/inventories"), "{\"name\": \"Lima\"}"));
@@ -45,7 +62,8 @@ public record ApprovedPlan(
     String food = api.resource(inventoryId, "Kit de alimentos", "FOOD", 300);
     String brigadeId = api.brigade("Brigada Chosica 1");
     String emergencyId = api.emergency();
-    String zoneId = api.scoredZone(aiService, emergencyId, zoneName, Need.WATER, Need.FOOD);
+    String zoneId =
+        api.scoredZone(aiService, emergencyId, zoneName, geolocation, Need.WATER, Need.FOOD);
     String planId =
         JsonPath.read(
             mockMvc
@@ -121,8 +139,13 @@ public record ApprovedPlan(
               """));
     }
 
-    /** A zone with a structured field report that mentions these needs, so it has a score. */
-    String scoredZone(FakeAiService aiService, String emergencyId, String name, Need... needs)
+    /**
+     * A zone with a structured field report that mentions these needs, so it has a score.
+     *
+     * @param geolocation JSON of the coordinates, or {@code null} for a zone without them
+     */
+    String scoredZone(
+        FakeAiService aiService, String emergencyId, String name, String geolocation, Need... needs)
         throws Exception {
       String zoneId =
           idOf(
@@ -132,12 +155,13 @@ public record ApprovedPlan(
                   """
                   {
                     "name": "%s",
+                    "geolocation": %s,
                     "populationImpact": { "population": 600, "familiesAffected": 75,
                                           "peopleAffected": 300 },
                     "damageLevel": "CRITICAL"
                   }
                   """
-                      .formatted(name)));
+                      .formatted(name, geolocation)));
       String text = "Reporte de " + name + " " + zoneId;
       aiService.willStructure(
           text,
