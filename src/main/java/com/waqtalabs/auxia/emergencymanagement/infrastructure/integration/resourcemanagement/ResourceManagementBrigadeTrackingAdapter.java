@@ -18,7 +18,7 @@ class ResourceManagementBrigadeTrackingAdapter implements BrigadeTrackingPort {
   }
 
   @Override
-  public Optional<Geolocation> baseOfAssignedBrigade(DistributionPlanId planId) {
+  public Optional<Geolocation> baseOfBrigadeDelivering(DistributionPlanId planId) {
     return resourceManagement
         .assignedBrigadeBase(planId.value())
         .map(base -> new Geolocation(base.latitude(), base.longitude()));

@@ -18,6 +18,9 @@ import com.waqtalabs.auxia.FakeAiServiceConfiguration;
 import com.waqtalabs.auxia.SignedInOrganization;
 import com.waqtalabs.auxia.TestcontainersConfiguration;
 import com.waqtalabs.auxia.emergencymanagement.application.FakeAiService;
+import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.CompleteBrigadeAssignmentCommandHandler;
+import com.waqtalabs.auxia.resourcemanagement.application.commands.CompleteBrigadeAssignmentCommand;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.DistributionPlanId;
 import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
@@ -49,6 +52,7 @@ class CitizenReportControllerTests {
 
   @Autowired private MockMvc mockMvc;
   @Autowired private FakeAiService aiService;
+  @Autowired private CompleteBrigadeAssignmentCommandHandler completeAssignment;
 
   private SignedInOrganization organization;
   private final String address = "190.12.%d.%d".formatted(SPOTS.get() % 250, SPOTS.get() / 250);
@@ -91,6 +95,42 @@ class CitizenReportControllerTests {
   }
 
   @Test
+  void fieldReportOfAnSosShowsWhatTheCitizenMarkedOnlyToTheAuthority() throws Exception {
+    String emergencyId = emergency();
+    zone(emergencyId, "Sector Alto Perú", null);
+    String id = UUID.randomUUID().toString();
+    send(sos(id, latitude, longitude)).andExpect(status().isCreated());
+    String fieldReportId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    get("/api/v1/emergencies/" + emergencyId + "/field-reports")
+                        .with(organization.authority()))
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$[0].id");
+    String path = "/api/v1/field-reports/" + fieldReportId + "/sos";
+
+    mockMvc.perform(get(path)).andExpect(status().isUnauthorized());
+    mockMvc
+        .perform(get(path).with(organization.authority()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.clientReportId").value(id))
+        .andExpect(jsonPath("$.category").value("MEDICAL"))
+        .andExpect(jsonPath("$.people.children").value(3))
+        .andExpect(jsonPath("$.people.injured").value(2))
+        .andExpect(jsonPath("$.accessConditions").value(contains("ROAD_BLOCKED")))
+        .andExpect(jsonPath("$.location.latitude").value(latitude));
+    mockMvc
+        .perform(
+            get("/api/v1/field-reports/" + UUID.randomUUID() + "/sos")
+                .with(organization.authority()))
+        .andExpect(status().isNotFound())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+  }
+
+  @Test
   void progressOfAnSosIsPublicAndNeverCached() throws Exception {
     zone(emergency(), "Sector Alto Perú", null);
     String id = UUID.randomUUID().toString();
@@ -119,8 +159,10 @@ class CitizenReportControllerTests {
   }
 
   @Test
-  void sosNearAZoneWhoseApprovedPlanABrigadeTookHasTheBrigadeOnTheWay() throws Exception {
-    ApprovedPlan.prepareAt(mockMvc, aiService, "Sector Nicolás de Piérola", latitude, longitude);
+  void sosHasTheBrigadeOnTheWayOnlyUntilItsDeliveryIsConfirmed() throws Exception {
+    ApprovedPlan plan =
+        ApprovedPlan.prepareAt(
+            mockMvc, aiService, "Sector Nicolás de Piérola", latitude, longitude);
     String id = UUID.randomUUID().toString();
     send(sos(id, latitude - 0.01, longitude)).andExpect(status().isCreated());
 
@@ -130,6 +172,17 @@ class CitizenReportControllerTests {
         .andExpect(jsonPath("$.status").value("BRIGADE_ON_THE_WAY"))
         .andExpect(jsonPath("$.score").isNumber())
         .andExpect(jsonPath("$.etaMinutes").isNumber());
+
+    completeAssignment.handle(
+        new CompleteBrigadeAssignmentCommand(
+            new DistributionPlanId(UUID.fromString(plan.planId()))));
+
+    mockMvc
+        .perform(get(SOS_PATH + "/" + id))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$.status").value("PRIORITIZED"))
+        .andExpect(jsonPath("$.score").isNumber())
+        .andExpect(jsonPath("$.etaMinutes").value(nullValue()));
   }
 
   @Test

@@ -4,12 +4,15 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AccessC
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.CitizenReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.SosCategory;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.VulnerablePeople;
 import java.time.LocalDateTime;
 import java.util.Collection;
 import java.util.Collections;
 import java.util.EnumSet;
+import java.util.List;
 import java.util.Objects;
 import java.util.Optional;
 import java.util.Set;
@@ -92,6 +95,57 @@ public final class CitizenReport {
         accessConditions,
         relatedReportId,
         fieldReportId);
+  }
+
+  /**
+   * The indicators that the NLP extracted from the text, completed with what the citizen marked
+   * in the SOS (A_04), which the text may not repeat: the children and elderly people, the injured
+   * among the people affected, medicine for the injured or a medical SOS, and water when there is
+   * no drinking water. A number marked by the citizen replaces a smaller one from the text, and an
+   * indicator completed this way is no longer missing.
+   */
+  public StructuredFieldData completeIndicators(StructuredFieldData extracted) {
+    Integer children = atLeast(extracted.children(), people.children());
+    Integer elderly = atLeast(extracted.elderlyPeople(), people.elderly());
+    Integer affected =
+        atLeast(
+            extracted.peopleAffected(), people.children() + people.elderly() + people.injured());
+    Set<Need> needs = EnumSet.noneOf(Need.class);
+    needs.addAll(extracted.needs());
+    if (people.injured() > 0 || category == SosCategory.MEDICAL) {
+      needs.add(Need.MEDICINE);
+    }
+    if (accessConditions.contains(AccessCondition.NO_DRINKING_WATER)) {
+      needs.add(Need.WATER);
+    }
+    List<String> missing =
+        extracted.missingVariables().stream()
+            .filter(
+                name ->
+                    switch (name) {
+                      case "children" -> children == null;
+                      case "elderlyPeople" -> elderly == null;
+                      case "peopleAffected" -> affected == null;
+                      case "needs" -> needs.isEmpty();
+                      default -> true;
+                    })
+            .toList();
+    return new StructuredFieldData(
+        extracted.damageLevel(),
+        extracted.familiesAffected(),
+        affected,
+        children,
+        elderly,
+        extracted.disabledPeople(),
+        needs,
+        missing);
+  }
+
+  private static Integer atLeast(Integer extracted, int marked) {
+    if (marked == 0) {
+      return extracted;
+    }
+    return extracted == null ? marked : Math.max(extracted, marked);
   }
 
   /** Rebuilds an SOS that is already stored. */

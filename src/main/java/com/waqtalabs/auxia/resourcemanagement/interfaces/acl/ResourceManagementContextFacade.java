@@ -170,13 +170,17 @@ public class ResourceManagementContextFacade {
   }
 
   /**
-   * Base of the brigade assigned to the plan, whether it is still delivering it or already done;
-   * empty when no brigade took it.
+   * Base of the brigade that is still delivering the plan; empty when no brigade took it or its
+   * delivery is already confirmed.
    */
   @Transactional(readOnly = true)
   public Optional<BrigadeBaseResource> assignedBrigadeBase(UUID distributionPlanId) {
+    DistributionPlanId planId = new DistributionPlanId(distributionPlanId);
     return brigadeRepository
-        .findByAssignedPlan(new DistributionPlanId(distributionPlanId))
+        .findByAssignedPlan(planId)
+        .filter(
+            brigade ->
+                brigade.currentAssignment().filter(current -> current.isFor(planId)).isPresent())
         .map(Brigade::baseLocation)
         .map(base -> new BrigadeBaseResource(base.latitude(), base.longitude()));
   }

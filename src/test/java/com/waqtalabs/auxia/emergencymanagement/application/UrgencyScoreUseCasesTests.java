@@ -80,7 +80,8 @@ class UrgencyScoreUseCasesTests {
   private final AssignFieldReportZoneCommandHandler assignZone =
       new AssignFieldReportZoneCommandHandler(reports, zones, events::add);
   private final StructureFieldReportCommandHandler structure =
-      new StructureFieldReportCommandHandler(reports, aiService, events::add);
+      new StructureFieldReportCommandHandler(
+          reports, new InMemoryCitizenReportRepository(), aiService, events::add);
   private final UpdateZonePopulationImpactCommandHandler updateImpact =
       new UpdateZonePopulationImpactCommandHandler(zones, events::add);
   private final CalculateUrgencyScoreCommandHandler calculateScore =

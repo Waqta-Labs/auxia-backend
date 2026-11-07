@@ -27,7 +27,10 @@ public record CitizenReportProgress(
     RECEIVED,
     /** In a zone that has an urgency score or a manual priority ("Priorizado por IA"). */
     PRIORITIZED,
-    /** In a zone with an approved plan that a brigade took ("Brigada en camino"). */
+    /**
+     * In a zone with an approved plan that a brigade is delivering ("Brigada en camino"). After
+     * the delivery the SOS is {@code PRIORITIZED} again.
+     */
     BRIGADE_ON_THE_WAY
   }
 }

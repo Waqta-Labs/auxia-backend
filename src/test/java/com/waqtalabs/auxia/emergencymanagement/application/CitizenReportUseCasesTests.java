@@ -5,13 +5,17 @@ import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterCitizenReportCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterCitizenReportCommandHandler.Registration;
+import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.StructureFieldReportCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterCitizenReportCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.commands.StructureFieldReportCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetCitizenReportProgressQuery;
+import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportSosQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.CitizenReportProgress;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.CitizenReportProgress.Stage;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.CitizenReportQueryService;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportRegistered;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.CitizenReportNotFoundException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportWithoutSosException;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.CitizenReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.DistributionPlan;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Emergency;
@@ -26,6 +30,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageL
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DistributionPlanId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyType;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PopulationImpact;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PriorityLevel;
@@ -33,6 +38,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ReportS
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ResourceId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ResourceQuantity;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.SosCategory;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.VulnerablePeople;
 import com.waqtalabs.auxia.shared.application.exceptions.RateLimitExceededException;
@@ -92,6 +98,23 @@ class CitizenReportUseCasesTests {
           zones,
           plans,
           plan -> Optional.ofNullable(brigadeBases.get(plan)));
+
+  /** The NLP found one child in the text, and nothing about the other people nor the needs. */
+  private final StructureFieldReportCommandHandler structure =
+      new StructureFieldReportCommandHandler(
+          fieldReports,
+          citizenReports,
+          text ->
+              new StructuredFieldData(
+                  DamageLevel.SEVERE,
+                  null,
+                  null,
+                  1,
+                  null,
+                  null,
+                  Set.of(),
+                  List.of("familiesAffected", "peopleAffected", "elderlyPeople", "needs")),
+          events::add);
 
   private final Emergency chosica = emergency("Huaico Chosica 2026");
   private final Zone altoPeru = zone(chosica, "Sector Alto Perú", ALTO_PERU);
@@ -288,6 +311,62 @@ class CitizenReportUseCasesTests {
         .isEqualTo(
             new CitizenReportProgress(
                 Stage.BRIGADE_ON_THE_WAY, Optional.of(94.0), Optional.of(12)));
+  }
+
+  @Test
+  void structuredSosIsCompletedWithWhatTheCitizenMarked() {
+    var command =
+        new RegisterCitizenReportCommand(
+            new CitizenReportId(UUID.randomUUID()),
+            SosCategory.RESCUE,
+            "Ayuda, se cayó la casa.",
+            CLOCK.instant(),
+            Optional.of(nearAltoPeru()),
+            new VulnerablePeople(3, 0, 2),
+            Set.of(AccessCondition.ROAD_BLOCKED, AccessCondition.NO_DRINKING_WATER),
+            Optional.empty(),
+            "190.12.4.7");
+    CitizenReport sos = register.handle(command).report();
+
+    FieldReport report =
+        structure.handle(new StructureFieldReportCommand(sos.fieldReportId().orElseThrow()));
+
+    StructuredFieldData data = report.structuredData().orElseThrow();
+    assertThat(data.children()).isEqualTo(3);
+    assertThat(data.peopleAffected()).isEqualTo(5);
+    assertThat(data.elderlyPeople()).isNull();
+    assertThat(data.needs()).containsExactly(Need.WATER, Need.MEDICINE);
+    assertThat(data.missingVariables()).containsExactly("familiesAffected", "elderlyPeople");
+    assertThat(data.damageLevel()).isEqualTo(DamageLevel.SEVERE);
+  }
+
+  @Test
+  void numberInTheTextAboveTheMarkedOneIsKeptAndAMedicalSosNeedsMedicine() {
+    CitizenReport sos = register.handle(sos(UUID.randomUUID(), nearAltoPeru())).report();
+    StructuredFieldData extracted =
+        new StructuredFieldData(
+            DamageLevel.CRITICAL, 40, 120, 8, null, null, Set.of(Need.FOOD), List.of());
+
+    StructuredFieldData data = sos.completeIndicators(extracted);
+
+    assertThat(data.children()).isEqualTo(8);
+    assertThat(data.peopleAffected()).isEqualTo(120);
+    assertThat(data.needs()).containsExactly(Need.FOOD, Need.MEDICINE);
+    assertThat(data.familiesAffected()).isEqualTo(40);
+  }
+
+  @Test
+  void fieldReportShowsWhatTheCitizenMarkedInTheSos() {
+    CitizenReport sos = register.handle(sos(UUID.randomUUID(), nearAltoPeru())).report();
+    FieldReport byAuthority =
+        fieldReports.save(
+            FieldReport.register(
+                chosica.id(), "Informe del COER", ReportSource.AUTHORITY, LocalDateTime.now(CLOCK)));
+
+    assertThat(queries.handle(new GetFieldReportSosQuery(sos.fieldReportId().orElseThrow())))
+        .isEqualTo(sos);
+    assertThatThrownBy(() -> queries.handle(new GetFieldReportSosQuery(byAuthority.id())))
+        .isInstanceOf(FieldReportWithoutSosException.class);
   }
 
   @Test

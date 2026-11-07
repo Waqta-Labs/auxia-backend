@@ -9,9 +9,9 @@ import java.util.Optional;
 public interface BrigadeTrackingPort {
 
   /**
-   * Base of the brigade assigned to the plan, whether it is still delivering it or done.
+   * Base of the brigade that is still delivering the plan.
    *
-   * @return empty when no brigade took the plan
+   * @return empty when no brigade took the plan or its delivery is already confirmed
    */
-  Optional<Geolocation> baseOfAssignedBrigade(DistributionPlanId planId);
+  Optional<Geolocation> baseOfBrigadeDelivering(DistributionPlanId planId);
 }

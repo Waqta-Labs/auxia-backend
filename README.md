@@ -541,11 +541,16 @@ in a queue until the API confirms it.
 | `PUT /api/v1/public/field-reports/{clientReportId}/attachments/{attachmentId}` | Photo or audio of the SOS (multipart, part `file`). `201` the first time, `200` when it was already stored. |
 | `GET /api/v1/field-reports/{id}/attachments` | Photo and audio of the SOS behind a field report, with sign-in. |
 | `GET /api/v1/field-reports/{id}/attachments/{attachmentId}` | Download one of them, with sign-in. |
+| `GET /api/v1/field-reports/{id}/sos` | What the citizen marked in the SOS besides the text: category, location, vulnerable people and access conditions, with sign-in. `404` when the report does not come from an SOS. |
 
 - The phone generates `clientReportId` (a UUID), so a retry never stores the
   SOS twice. `source` is always `CITIZEN`, whatever the request says.
 - The SOS becomes a field report of source `CITIZEN`, pending review like any
-  other, and the NLP structures it. It goes to the active emergency and the zone
+  other, and the NLP structures it. What the citizen marked completes the
+  indicators of the text: the children and elderly people, the injured among the
+  people affected, medicine for the injured or a medical SOS, and water when
+  there is no drinking water. A number in the text above the marked one is
+  kept. It goes to the active emergency and the zone
   nearest to its `location`, up to 5 km away; up to 50 km it goes to the
   emergency of that zone, pending zone assignment. Without `location`, or
   farther, it goes to the only active emergency if there is just one. Otherwise
@@ -554,7 +559,8 @@ in a queue until the API confirms it.
   same emergency and zone.
 - `status` is `RECEIVED` while the SOS has no zone or its zone has no score,
   `PRIORITIZED` once the zone has a score or a manual priority, and
-  `BRIGADE_ON_THE_WAY` once a brigade took an approved plan of the zone. As
+  `BRIGADE_ON_THE_WAY` while a brigade is delivering an approved plan of the
+  zone; once the delivery is confirmed it is `PRIORITIZED` again. As
   "Mis reportes" shows it (A_05), `score` is the Urgency Score of the zone once
   the SOS is prioritized, and `etaMinutes` the travel of the brigade from its
   base, in a straight line at 30 km/h, while it is on the way.
