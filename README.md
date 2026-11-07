@@ -134,6 +134,7 @@ blockchain are configured with environment variables:
 | `BLOCKCHAIN_CHAIN_ID` | Network of the transactions. Default `11155111` (Sepolia) |
 | `SOS_RATE_LIMIT_MAX_REPORTS` / `SOS_RATE_LIMIT_WINDOW` | New SOS and SOS files that one address can send in a period. Default `10` every `10m` |
 | `SOS_ATTACHMENTS_CONTAINER` | Private container of the photos and audios of the SOS, in the storage account of the evidence. Default `sos-attachments` |
+| `BRIGADE_ID_CARDS_CONTAINER` | Private container of the photos of the cards of the brigadists that register (A_02). Default `brigade-id-cards` |
 | `CORS_ALLOWED_ORIGINS` | Origins of the web application that may call the API from the browser, separated by commas. Default `http://localhost:5173,http://localhost:3000` (Vite and Next.js dev servers) |
 
 For local development, copy `.env.example` to `.env` and fill in the values.
@@ -176,6 +177,7 @@ application starts.
 | V10 | `citizen_reports`: the SOS of citizens from the mobile app, identified by the id the phone generates, with the field report each one became. |
 | V11 | `citizen_report_attachments`: the photo and the audio of each SOS (A_04), at most one of each. |
 | V12 | `staff_members.user_id`: the `FIELD_BRIGADE` account of a member, in one brigade at most (A_07). |
+| V13 | `brigades.code`, unique, generated for the existing brigades; `brigade_registrations`, the requests of brigadists from the app (A_02). |
 
 Neon already had the schema of V1 when Flyway was added, so on Neon V1 is
 recorded as the baseline (`baseline-on-migrate`) and only V2 onwards run. An
@@ -420,7 +422,7 @@ otherwise).
 
 | Method and path | Description |
 |---|---|
-| `POST /api/v1/brigades` | Create a brigade of the organization of the user, with its base location. It starts `AVAILABLE`. |
+| `POST /api/v1/brigades` | Create a brigade of the organization of the user, with its base location and optionally its `code`. It starts `AVAILABLE`. |
 | `GET /api/v1/brigades?status=` | Brigades of the organization of the user by name, optionally by status. |
 | `GET /api/v1/brigades/{id}` | One brigade with its members and its assignment in progress. |
 | `POST /api/v1/brigades/{id}/members` | Add a member (`LEADER`, `DRIVER`, `MEDIC` or `VOLUNTEER`), optionally with the `userId` of its `FIELD_BRIGADE` account. |
@@ -429,7 +431,9 @@ otherwise).
 | `GET /api/v1/me/missions` | Missions of the brigade of the signed-in `FIELD_BRIGADE` (A_07). |
 
 - Brigade names are unique per organization (409). A brigade of another
-  organization answers 404.
+  organization answers 404. Its `code` (such as `BRG-ALFA-07`), which a
+  brigadist writes to register, is unique in the platform (409) and generated
+  when it is not given.
 - A brigade is assigned to a distribution plan only while it is available and
   has a `LEADER`, and has one assignment in progress at most. It becomes
   `ASSIGNED` when a plan is approved and `AVAILABLE` again when the delivery of
@@ -581,6 +585,13 @@ in a queue until the API confirms it.
 | `GET /api/v1/users/me` | The account of the signed-in user. |
 | `PATCH /api/v1/users/{id}/role` | Change the role of a user (US-22). |
 | `PATCH /api/v1/users/{id}/status` | `ACTIVE` to enable or unlock an account, `DISABLED` to disable it. |
+| `PUT /api/v1/public/brigade-registrations/{id}` | Request of a brigadist from the app (A_02), without sign-in: part `registration` (JSON) and optional part `idCard`. |
+| `GET /api/v1/public/brigade-registrations/{id}` | Status of the request, with its secret in `X-Device-Secret`. |
+| `POST /api/v1/auth/device-sign-in` | Sign in an approved brigadist with `registrationId` and `deviceSecret`. |
+| `GET /api/v1/brigade-registrations?status=` | Requests of the organization (`PENDING` by default), for its administrator. |
+| `GET /api/v1/brigade-registrations/{id}/id-card` | Photo of the card of a request. |
+| `POST /api/v1/brigade-registrations/{id}/approval` | Approve a request: creates the account and adds the brigadist to the brigade. |
+| `POST /api/v1/brigade-registrations/{id}/rejection` | Reject a request with a `reason` that the brigadist sees. |
 
 - Wrong email, wrong password, a locked account and a suspended organization
   get the same 401 "Invalid credentials.", so the answer does not reveal what
@@ -595,6 +606,21 @@ in a queue until the API confirms it.
   organizations with `PLATFORM_ADMIN_KEY`.
 - Other bounded contexts use `IdentityAccessContextFacade` to check the current
   role of a user before a critical command.
+- A brigadist registers from the app (A_02) with their name, phone,
+  organization, the `code` of their brigade and optionally the photo of their
+  card (JPEG, PNG, WEBP or HEIC, up to 10 MB). A_02 asks for no e-mail nor
+  password: the phone generates the `registrationId` and a `deviceSecret` (32 to
+  64 characters), which is stored as a hash. Sending them again returns the
+  stored request (200); the same id with another secret answers 409, and an
+  unknown code 404.
+- An `ORGANIZATION_ADMIN` of the organization of that brigade approves or
+  rejects it once (409 after). Approving it creates a `FIELD_BRIGADE` account,
+  whose credential is the secret and whose e-mail ends in `.invalid` so it
+  never receives mail, and adds the brigadist to the brigade as a `VOLUNTEER`
+  linked to it, so the app shows its missions. The app asks for the status
+  with the secret and, once approved, signs in with
+  `POST /api/v1/auth/device-sign-in`: the same token, 401 and lock of
+  `sign-in`.
 
 ### Roles
 

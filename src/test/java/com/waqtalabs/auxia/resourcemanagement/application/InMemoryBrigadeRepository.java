@@ -46,6 +46,11 @@ public class InMemoryBrigadeRepository implements BrigadeRepository {
   }
 
   @Override
+  public Optional<Brigade> findByCode(String code) {
+    return brigades.values().stream().filter(brigade -> brigade.code().equals(code)).findFirst();
+  }
+
+  @Override
   public Optional<Brigade> findByMemberAccount(UserId userId) {
     return brigades.values().stream()
         .filter(

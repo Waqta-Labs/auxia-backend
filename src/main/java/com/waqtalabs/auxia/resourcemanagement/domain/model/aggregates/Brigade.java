@@ -16,6 +16,7 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ZoneId;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.Objects;
 import java.util.Optional;
 
@@ -33,6 +34,7 @@ public final class Brigade {
   private final OrganizationId organizationId;
   private final String name;
   private final Location baseLocation;
+  private final String code;
   private final List<StaffMember> members;
   private final List<BrigadeAssignment> assignments;
   private BrigadeStatus status;
@@ -41,6 +43,7 @@ public final class Brigade {
       BrigadeId id,
       OrganizationId organizationId,
       String name,
+      String code,
       Location baseLocation,
       BrigadeStatus status,
       List<StaffMember> members,
@@ -52,22 +55,53 @@ public final class Brigade {
       throw new IllegalArgumentException("name must not be blank");
     }
     this.name = name.strip();
+    this.code = requireCode(code);
     this.baseLocation = Objects.requireNonNull(baseLocation, "baseLocation");
     this.status = Objects.requireNonNull(status, "status");
     this.members = new ArrayList<>(members);
     this.assignments = new ArrayList<>(assignments);
   }
 
-  /** Creates an available brigade, still without members. */
+  /** Creates an available brigade, still without members, with a generated code. */
   public static Brigade create(OrganizationId organizationId, String name, Location baseLocation) {
+    return create(organizationId, name, baseLocation, null);
+  }
+
+  /**
+   * Creates an available brigade, still without members.
+   *
+   * @param code what a brigadist writes to register in the mobile app (A_02), such as {@code
+   *     BRG-ALFA-07}; {@code null} generates one from the identifier
+   */
+  public static Brigade create(
+      OrganizationId organizationId, String name, Location baseLocation, String code) {
+    BrigadeId id = BrigadeId.generate();
+    String brigadeCode =
+        code != null
+            ? code
+            : "BRG-" + id.value().toString().substring(0, 8).toUpperCase(Locale.ROOT);
     return new Brigade(
-        BrigadeId.generate(),
+        id,
         organizationId,
         name,
+        brigadeCode,
         baseLocation,
         BrigadeStatus.AVAILABLE,
         List.of(),
         List.of());
+  }
+
+  /** {@code brg-alfa-07} and {@code BRG-ALFA-07} are the same code. */
+  public static String normalizeCode(String code) {
+    return code == null ? null : code.strip().toUpperCase(Locale.ROOT);
+  }
+
+  private static String requireCode(String code) {
+    String normalized = normalizeCode(Objects.requireNonNull(code, "code"));
+    if (!normalized.matches("[A-Z0-9-]{3,30}")) {
+      throw new IllegalArgumentException("code must have 3 to 30 letters, digits or hyphens");
+    }
+    return normalized;
   }
 
   /** Rebuilds a brigade that is already stored. */
@@ -75,11 +109,13 @@ public final class Brigade {
       BrigadeId id,
       OrganizationId organizationId,
       String name,
+      String code,
       Location baseLocation,
       BrigadeStatus status,
       List<StaffMember> members,
       List<BrigadeAssignment> assignments) {
-    return new Brigade(id, organizationId, name, baseLocation, status, members, assignments);
+    return new Brigade(
+        id, organizationId, name, code, baseLocation, status, members, assignments);
   }
 
   public void addMember(StaffMember member) {
@@ -178,6 +214,10 @@ public final class Brigade {
 
   public OrganizationId organizationId() {
     return organizationId;
+  }
+
+  public String code() {
+    return code;
   }
 
   public String name() {

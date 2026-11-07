@@ -20,6 +20,9 @@ public interface BrigadeRepository {
   /** The brigade assigned to the plan, whether its assignment is in progress or completed. */
   Optional<Brigade> findByAssignedPlan(DistributionPlanId planId);
 
+  /** The brigade with the code, in any organization; the code is already normalized. */
+  Optional<Brigade> findByCode(String code);
+
   /** The brigade that has the account among its members. */
   Optional<Brigade> findByMemberAccount(UserId userId);
 }
