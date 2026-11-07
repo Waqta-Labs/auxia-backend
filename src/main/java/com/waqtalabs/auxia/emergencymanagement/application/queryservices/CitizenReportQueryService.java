@@ -8,6 +8,9 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.CitizenRe
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.DistributionPlan;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.TravelEstimate;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.CitizenReportRepository;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.DistributionPlanRepository;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.FieldReportRepository;
@@ -18,8 +21,8 @@ import org.springframework.transaction.annotation.Transactional;
 
 /**
  * Progress of the SOS of a citizen, from the zone its field report belongs to: received while it
- * has no zone, prioritized once the zone has a score, and a brigade on the way once a brigade
- * took an approved plan of the zone.
+ * has no zone or its zone has no score, prioritized once the zone has a score, and a brigade on
+ * the way once a brigade took an approved plan of the zone.
  */
 @Service
 @Transactional(readOnly = true)
@@ -59,25 +62,29 @@ public class CitizenReportQueryService {
             .flatMap(FieldReport::zoneId)
             .flatMap(zoneRepository::findById);
     if (zone.isEmpty()) {
-      return progress(Stage.RECEIVED);
+      return new CitizenReportProgress(Stage.RECEIVED, Optional.empty(), Optional.empty());
     }
-    if (hasBrigadeOnTheWay(zone.get())) {
-      return progress(Stage.BRIGADE_ON_THE_WAY);
+    Optional<Double> score = zone.get().urgencyScore().map(UrgencyScore::value);
+    Optional<Geolocation> brigadeBase = baseOfBrigadeOnTheWay(zone.get());
+    if (brigadeBase.isPresent()) {
+      Optional<Integer> eta =
+          zone.get()
+              .geolocation()
+              .map(place -> TravelEstimate.between(brigadeBase.get(), place).minutes());
+      return new CitizenReportProgress(Stage.BRIGADE_ON_THE_WAY, score, eta);
     }
-    if (zone.get().urgencyScore().isPresent() || zone.get().isPrioritizedManually()) {
-      return progress(Stage.PRIORITIZED);
+    if (score.isPresent() || zone.get().isPrioritizedManually()) {
+      return new CitizenReportProgress(Stage.PRIORITIZED, score, Optional.empty());
     }
-    return progress(Stage.RECEIVED);
+    return new CitizenReportProgress(Stage.RECEIVED, Optional.empty(), Optional.empty());
   }
 
-  private boolean hasBrigadeOnTheWay(Zone zone) {
+  /** Base of the brigade of the most recent approved plan of the zone that a brigade took. */
+  private Optional<Geolocation> baseOfBrigadeOnTheWay(Zone zone) {
     return distributionPlanRepository.findApprovedByZoneId(zone.id()).stream()
         .map(DistributionPlan::id)
-        .anyMatch(brigadeTracking::hasBrigade);
-  }
-
-  /** No arrival time yet: the brigades do not report their position. */
-  private static CitizenReportProgress progress(Stage stage) {
-    return new CitizenReportProgress(stage, Optional.empty());
+        .map(brigadeTracking::baseOfAssignedBrigade)
+        .flatMap(Optional::stream)
+        .findFirst();
   }
 }

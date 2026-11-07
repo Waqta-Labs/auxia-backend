@@ -70,6 +70,8 @@ class SecurityConfiguration {
                     // SOS of citizens from the mobile app, limited per address.
                     .requestMatchers(HttpMethod.POST, "/api/v1/public/field-reports")
                     .permitAll()
+                    .requestMatchers(HttpMethod.PUT, "/api/v1/public/field-reports/*/attachments/*")
+                    .permitAll()
                     // The SINPAD simulator checks the key of the sender (X-Api-Key).
                     .requestMatchers("/sinpad-simulator/**")
                     .permitAll()

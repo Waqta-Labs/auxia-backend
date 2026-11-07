@@ -2,6 +2,7 @@ package com.waqtalabs.auxia.emergencymanagement.application;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.CitizenReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.CitizenReportId;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.CitizenReportRepository;
 import java.util.LinkedHashMap;
 import java.util.Map;
@@ -21,6 +22,13 @@ public class InMemoryCitizenReportRepository implements CitizenReportRepository 
   @Override
   public Optional<CitizenReport> findById(CitizenReportId id) {
     return Optional.ofNullable(reports.get(id));
+  }
+
+  @Override
+  public Optional<CitizenReport> findByFieldReportId(FieldReportId fieldReportId) {
+    return reports.values().stream()
+        .filter(report -> report.fieldReportId().filter(fieldReportId::equals).isPresent())
+        .findFirst();
   }
 
   public int count() {

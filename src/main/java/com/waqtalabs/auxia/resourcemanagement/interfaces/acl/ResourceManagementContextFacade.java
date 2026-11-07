@@ -8,6 +8,7 @@ import com.waqtalabs.auxia.resourcemanagement.application.commands.AssignBrigade
 import com.waqtalabs.auxia.resourcemanagement.application.commands.ChangeReservationCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.ReleaseReservationCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.ReserveResourcesCommand;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Brigade;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.DistributionPlanId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Location;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
@@ -129,14 +130,15 @@ public class ResourceManagementContextFacade {
   }
 
   /**
-   * Whether a brigade was assigned to the plan, whether it is still delivering it or already
-   * done.
+   * Base of the brigade assigned to the plan, whether it is still delivering it or already done;
+   * empty when no brigade took it.
    */
   @Transactional(readOnly = true)
-  public boolean hasAssignedBrigade(UUID distributionPlanId) {
+  public Optional<BrigadeBaseResource> assignedBrigadeBase(UUID distributionPlanId) {
     return brigadeRepository
         .findByAssignedPlan(new DistributionPlanId(distributionPlanId))
-        .isPresent();
+        .map(Brigade::baseLocation)
+        .map(base -> new BrigadeBaseResource(base.latitude(), base.longitude()));
   }
 
   private static List<ReservationLine> toReservationLines(List<ReservationLineResource> lines) {
