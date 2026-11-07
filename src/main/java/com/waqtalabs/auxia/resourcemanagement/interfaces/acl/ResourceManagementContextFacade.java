@@ -14,6 +14,7 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Organiza
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ReservationLine;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ResourceId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ZoneId;
+import com.waqtalabs.auxia.resourcemanagement.domain.repositories.BrigadeRepository;
 import com.waqtalabs.auxia.resourcemanagement.domain.repositories.InventoryRepository;
 import java.util.List;
 import java.util.Optional;
@@ -24,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * What Resource Management offers to the other bounded contexts, which run in the same process
  * (Shared Kernel). Emergency Management uses it to check the available stock of an organization,
- * to reserve or release the resources of a distribution plan and to assign it a brigade.
+ * to reserve or release the resources of a distribution plan, to assign it a brigade and to know
+ * whether a brigade took it.
  *
  * <p>It receives and returns UUIDs and simple records, so no other context depends on the domain
  * of Resource Management. Errors are the domain exceptions of this context: 404 when the
@@ -35,6 +37,7 @@ import org.springframework.transaction.annotation.Transactional;
 public class ResourceManagementContextFacade {
 
   private final InventoryRepository inventoryRepository;
+  private final BrigadeRepository brigadeRepository;
   private final ReserveResourcesCommandHandler reserveResources;
   private final ChangeReservationCommandHandler changeReservation;
   private final ReleaseReservationCommandHandler releaseReservation;
@@ -42,11 +45,13 @@ public class ResourceManagementContextFacade {
 
   public ResourceManagementContextFacade(
       InventoryRepository inventoryRepository,
+      BrigadeRepository brigadeRepository,
       ReserveResourcesCommandHandler reserveResources,
       ChangeReservationCommandHandler changeReservation,
       ReleaseReservationCommandHandler releaseReservation,
       AssignBrigadeCommandHandler assignBrigade) {
     this.inventoryRepository = inventoryRepository;
+    this.brigadeRepository = brigadeRepository;
     this.reserveResources = reserveResources;
     this.changeReservation = changeReservation;
     this.releaseReservation = releaseReservation;
@@ -121,6 +126,17 @@ public class ResourceManagementContextFacade {
                 Optional.ofNullable(zoneLocation)
                     .map(location -> new Location(location.latitude(), location.longitude()))))
         .map(brigade -> brigade.id().value());
+  }
+
+  /**
+   * Whether a brigade was assigned to the plan, whether it is still delivering it or already
+   * done.
+   */
+  @Transactional(readOnly = true)
+  public boolean hasAssignedBrigade(UUID distributionPlanId) {
+    return brigadeRepository
+        .findByAssignedPlan(new DistributionPlanId(distributionPlanId))
+        .isPresent();
   }
 
   private static List<ReservationLine> toReservationLines(List<ReservationLineResource> lines) {

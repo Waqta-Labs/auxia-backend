@@ -71,6 +71,13 @@ auxia:
     api-key: ${SINPAD_API_KEY:sinpad-simulator-local-key}
     simulator:
       enabled: ${SINPAD_SIMULATOR_ENABLED:true}
+  citizen-reports:
+    # SOS of citizens without signing in (POST /api/v1/public/field-reports). In a disaster many
+    # people share an address (mobile operator NAT, the Wi-Fi of a shelter), so the limit is
+    # generous. A retry of an SOS already stored does not count.
+    rate-limit:
+      max-reports: ${SOS_RATE_LIMIT_MAX_REPORTS:10}
+      window: ${SOS_RATE_LIMIT_WINDOW:10m}
   evidence-storage:
     # Azure Blob Storage, or Azurite for local development (see the README).
     connection-string: ${AZURE_STORAGE_CONNECTION_STRING}

@@ -24,9 +24,9 @@ import org.springframework.web.servlet.HandlerExceptionResolver;
 
 /**
  * Security of the whole Backend API. Every endpoint needs a valid JWT except the sign-in, the
- * organization endpoints of the platform operator (which check X-Platform-Key), the API
- * documentation and the health check. Roles are checked on each controller method with
- * {@code @PreAuthorize}.
+ * organization endpoints of the platform operator (which check X-Platform-Key), the public view
+ * and the SOS of citizens, the API documentation and the health check. Roles are checked on each
+ * controller method with {@code @PreAuthorize}.
  *
  * <p>A missing token (401) and a missing role (403) are answered by the global exception handler,
  * so they share the problem detail format and the language of every other error.
@@ -66,6 +66,9 @@ class SecurityConfiguration {
                     .permitAll()
                     // Public view for citizens (EP-08).
                     .requestMatchers(HttpMethod.GET, "/api/v1/public/**")
+                    .permitAll()
+                    // SOS of citizens from the mobile app, limited per address.
+                    .requestMatchers(HttpMethod.POST, "/api/v1/public/field-reports")
                     .permitAll()
                     // The SINPAD simulator checks the key of the sender (X-Api-Key).
                     .requestMatchers("/sinpad-simulator/**")

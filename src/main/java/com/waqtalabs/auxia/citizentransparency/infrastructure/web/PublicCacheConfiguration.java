@@ -19,6 +19,9 @@ import org.springframework.web.servlet.config.annotation.WebMvcConfigurer;
 class PublicCacheConfiguration implements WebMvcConfigurer {
 
   static final String PUBLIC_PATHS = "/api/v1/public/**";
+
+  /** The SOS of a citizen and its progress belong to one person: never cached. */
+  static final String CITIZEN_SOS_PATHS = "/api/v1/public/field-reports/**";
   static final String CACHE_CONTROL =
       CacheControl.maxAge(Duration.ofSeconds(60)).cachePublic().getHeaderValue();
 
@@ -34,6 +37,7 @@ class PublicCacheConfiguration implements WebMvcConfigurer {
                 return true;
               }
             })
-        .addPathPatterns(PUBLIC_PATHS);
+        .addPathPatterns(PUBLIC_PATHS)
+        .excludePathPatterns(CITIZEN_SOS_PATHS);
   }
 }

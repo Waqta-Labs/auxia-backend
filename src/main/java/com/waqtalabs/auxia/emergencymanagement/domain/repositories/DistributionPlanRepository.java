@@ -22,4 +22,10 @@ public interface DistributionPlanRepository {
 
   /** Whether the organization has proposed plans of the emergency still to decide. */
   boolean hasPendingPlans(EmergencyId emergencyId, OrganizationId organizationId);
+
+  /**
+   * Approved and executed plans of the zone, of every organization: the help on its way to the
+   * zone or already delivered. Unlike the other lists, it is not limited to one organization.
+   */
+  List<DistributionPlan> findApprovedByZoneId(ZoneId zoneId);
 }

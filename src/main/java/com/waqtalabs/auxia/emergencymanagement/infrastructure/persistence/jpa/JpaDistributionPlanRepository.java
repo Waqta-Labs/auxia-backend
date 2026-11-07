@@ -64,4 +64,16 @@ class JpaDistributionPlanRepository implements DistributionPlanRepository {
     return repository.existsByEmergencyIdAndOrganizationIdAndStatus(
         emergencyId.value(), organizationId.value(), DistributionPlanStatus.PROPOSED);
   }
+
+  @Override
+  @Transactional(readOnly = true)
+  public List<DistributionPlan> findApprovedByZoneId(ZoneId zoneId) {
+    return repository
+        .findByZoneIdAndStatusInOrderByCreatedAtDesc(
+            zoneId.value(),
+            List.of(DistributionPlanStatus.APPROVED, DistributionPlanStatus.EXECUTED))
+        .stream()
+        .map(DistributionPlanJpaMapper::toDomain)
+        .toList();
+  }
 }
