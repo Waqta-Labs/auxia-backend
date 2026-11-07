@@ -2,8 +2,11 @@ package com.waqtalabs.auxia.emergencymanagement.application.queryservices;
 
 import com.waqtalabs.auxia.emergencymanagement.application.ports.BrigadeTrackingPort;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetCitizenReportProgressQuery;
+import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportSosQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.CitizenReportProgress.Stage;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.CitizenReportNotFoundException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportNotFoundException;
+import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportWithoutSosException;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.CitizenReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.DistributionPlan;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldReport;
@@ -22,7 +25,7 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * Progress of the SOS of a citizen, from the zone its field report belongs to: received while it
  * has no zone or its zone has no score, prioritized once the zone has a score, and a brigade on
- * the way once a brigade took an approved plan of the zone.
+ * the way while a brigade is delivering an approved plan of the zone.
  */
 @Service
 @Transactional(readOnly = true)
@@ -79,11 +82,29 @@ public class CitizenReportQueryService {
     return new CitizenReportProgress(Stage.RECEIVED, Optional.empty(), Optional.empty());
   }
 
-  /** Base of the brigade of the most recent approved plan of the zone that a brigade took. */
+  /**
+   * The SOS behind a field report, with what the citizen marked besides the text.
+   *
+   * @throws FieldReportNotFoundException if the field report does not exist
+   * @throws FieldReportWithoutSosException if the field report does not come from an SOS
+   */
+  public CitizenReport handle(GetFieldReportSosQuery query) {
+    if (fieldReportRepository.findById(query.fieldReportId()).isEmpty()) {
+      throw new FieldReportNotFoundException(query.fieldReportId());
+    }
+    return citizenReportRepository
+        .findByFieldReportId(query.fieldReportId())
+        .orElseThrow(() -> new FieldReportWithoutSosException(query.fieldReportId()));
+  }
+
+  /**
+   * Base of the brigade delivering the most recent approved plan of the zone. Once the delivery
+   * is confirmed the brigade is no longer on the way, and the SOS shows its priority again.
+   */
   private Optional<Geolocation> baseOfBrigadeOnTheWay(Zone zone) {
     return distributionPlanRepository.findApprovedByZoneId(zone.id()).stream()
         .map(DistributionPlan::id)
-        .map(brigadeTracking::baseOfAssignedBrigade)
+        .map(brigadeTracking::baseOfBrigadeDelivering)
         .flatMap(Optional::stream)
         .findFirst();
   }
