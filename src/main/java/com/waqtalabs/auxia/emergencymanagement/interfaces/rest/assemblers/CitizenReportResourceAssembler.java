@@ -38,9 +38,8 @@ public final class CitizenReportResourceAssembler {
         : new VulnerablePeople(people.children(), people.elderly(), people.injured());
   }
 
-  /** The score is always {@code null}: the public API does not reveal it (TS-C02, R-04). */
   public static CitizenReportStatusResource toResource(CitizenReportProgress progress) {
     return new CitizenReportStatusResource(
-        progress.stage(), null, progress.etaMinutes().orElse(null));
+        progress.stage(), progress.score().orElse(null), progress.etaMinutes().orElse(null));
   }
 }

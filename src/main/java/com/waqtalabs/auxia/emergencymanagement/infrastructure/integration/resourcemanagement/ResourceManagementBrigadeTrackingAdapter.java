@@ -2,7 +2,9 @@ package com.waqtalabs.auxia.emergencymanagement.infrastructure.integration.resou
 
 import com.waqtalabs.auxia.emergencymanagement.application.ports.BrigadeTrackingPort;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DistributionPlanId;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Geolocation;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.acl.ResourceManagementContextFacade;
+import java.util.Optional;
 import org.springframework.stereotype.Component;
 
 /** Adapter to the brigade assignments of Resource Management, through its Open Host Service. */
@@ -16,7 +18,9 @@ class ResourceManagementBrigadeTrackingAdapter implements BrigadeTrackingPort {
   }
 
   @Override
-  public boolean hasBrigade(DistributionPlanId planId) {
-    return resourceManagement.hasAssignedBrigade(planId.value());
+  public Optional<Geolocation> baseOfAssignedBrigade(DistributionPlanId planId) {
+    return resourceManagement
+        .assignedBrigadeBase(planId.value())
+        .map(base -> new Geolocation(base.latitude(), base.longitude()));
   }
 }

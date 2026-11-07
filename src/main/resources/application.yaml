@@ -78,6 +78,8 @@ auxia:
     rate-limit:
       max-reports: ${SOS_RATE_LIMIT_MAX_REPORTS:10}
       window: ${SOS_RATE_LIMIT_WINDOW:10m}
+    # Private container of the photos and audios of the SOS, in the account of the evidence.
+    attachments-container: ${SOS_ATTACHMENTS_CONTAINER:sos-attachments}
   evidence-storage:
     # Azure Blob Storage, or Azurite for local development (see the README).
     connection-string: ${AZURE_STORAGE_CONNECTION_STRING}

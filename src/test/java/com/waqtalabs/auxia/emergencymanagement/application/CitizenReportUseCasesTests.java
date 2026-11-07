@@ -44,8 +44,9 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneOffset;
 import java.util.ArrayList;
-import java.util.HashSet;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
@@ -67,7 +68,7 @@ class CitizenReportUseCasesTests {
   private final InMemoryDistributionPlanRepository plans = new InMemoryDistributionPlanRepository();
   private final List<DomainEvent> events = new ArrayList<>();
   private final List<String> acquiredBy = new ArrayList<>();
-  private final Set<DistributionPlanId> plansWithBrigade = new HashSet<>();
+  private final Map<DistributionPlanId, Geolocation> brigadeBases = new HashMap<>();
   private boolean limitReached;
 
   private final RegisterCitizenReportCommandHandler register =
@@ -86,7 +87,11 @@ class CitizenReportUseCasesTests {
           events::add);
   private final CitizenReportQueryService queries =
       new CitizenReportQueryService(
-          citizenReports, fieldReports, zones, plans, plansWithBrigade::contains);
+          citizenReports,
+          fieldReports,
+          zones,
+          plans,
+          plan -> Optional.ofNullable(brigadeBases.get(plan)));
 
   private final Emergency chosica = emergency("Huaico Chosica 2026");
   private final Zone altoPeru = zone(chosica, "Sector Alto Perú", ALTO_PERU);
@@ -253,7 +258,9 @@ class CitizenReportUseCasesTests {
     CitizenReport sos = register.handle(sos(UUID.randomUUID(), nearAltoPeru())).report();
     scoreAltoPeru(94.0);
 
-    assertThat(progress(sos)).isEqualTo(stage(Stage.PRIORITIZED));
+    assertThat(progress(sos))
+        .isEqualTo(
+            new CitizenReportProgress(Stage.PRIORITIZED, Optional.of(94.0), Optional.empty()));
   }
 
   @Test
@@ -267,16 +274,20 @@ class CitizenReportUseCasesTests {
   }
 
   @Test
-  void sosOfAZoneWhoseApprovedPlanABrigadeTookHasTheBrigadeOnTheWay() {
+  void sosOfAZoneWhoseApprovedPlanABrigadeTookHasTheBrigadeOnTheWayWithItsEta() {
     CitizenReport sos = register.handle(sos(UUID.randomUUID(), nearAltoPeru())).report();
     scoreAltoPeru(94.0);
     DistributionPlan plan = approvedPlan();
 
     assertThat(progress(sos).stage()).isEqualTo(Stage.PRIORITIZED);
 
-    plansWithBrigade.add(plan.id());
+    Geolocation sixKilometersAway = new Geolocation(-11.9436, -76.6528);
+    brigadeBases.put(plan.id(), sixKilometersAway);
 
-    assertThat(progress(sos)).isEqualTo(stage(Stage.BRIGADE_ON_THE_WAY));
+    assertThat(progress(sos))
+        .isEqualTo(
+            new CitizenReportProgress(
+                Stage.BRIGADE_ON_THE_WAY, Optional.of(94.0), Optional.of(12)));
   }
 
   @Test
@@ -292,7 +303,7 @@ class CitizenReportUseCasesTests {
   }
 
   private static CitizenReportProgress stage(Stage stage) {
-    return new CitizenReportProgress(stage, Optional.empty());
+    return new CitizenReportProgress(stage, Optional.empty(), Optional.empty());
   }
 
   /** About 1 km from the zone. */

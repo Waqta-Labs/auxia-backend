@@ -1,9 +1,11 @@
 package com.waqtalabs.auxia.emergencymanagement.interfaces.rest;
 
+import static org.hamcrest.Matchers.contains;
 import static org.hamcrest.Matchers.containsInAnyOrder;
 import static org.hamcrest.Matchers.not;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.content;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
@@ -16,6 +18,7 @@ import com.waqtalabs.auxia.FakeAiServiceConfiguration;
 import com.waqtalabs.auxia.SignedInOrganization;
 import com.waqtalabs.auxia.TestcontainersConfiguration;
 import com.waqtalabs.auxia.emergencymanagement.application.FakeAiService;
+import java.nio.charset.StandardCharsets;
 import java.util.UUID;
 import java.util.concurrent.atomic.AtomicInteger;
 import org.junit.jupiter.api.BeforeEach;
@@ -25,7 +28,9 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
+import org.springframework.http.HttpMethod;
 import org.springframework.http.MediaType;
+import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.ResultActions;
 
@@ -100,7 +105,7 @@ class CitizenReportControllerTests {
   }
 
   @Test
-  void sosNearAZoneWithScoreIsPrioritizedWithoutShowingTheScore() throws Exception {
+  void sosNearAZoneWithScoreIsPrioritizedWithTheScoreOfTheZone() throws Exception {
     zone(emergency(), "Quebrada Pedregal", 600);
     String id = UUID.randomUUID().toString();
     send(sos(id, latitude, longitude + 0.01)).andExpect(status().isCreated());
@@ -109,7 +114,8 @@ class CitizenReportControllerTests {
         .perform(get(SOS_PATH + "/" + id))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("PRIORITIZED"))
-        .andExpect(jsonPath("$.score").value(nullValue()));
+        .andExpect(jsonPath("$.score").isNumber())
+        .andExpect(jsonPath("$.etaMinutes").value(nullValue()));
   }
 
   @Test
@@ -122,8 +128,8 @@ class CitizenReportControllerTests {
         .perform(get(SOS_PATH + "/" + id))
         .andExpect(status().isOk())
         .andExpect(jsonPath("$.status").value("BRIGADE_ON_THE_WAY"))
-        .andExpect(jsonPath("$.score").value(nullValue()))
-        .andExpect(jsonPath("$.etaMinutes").value(nullValue()));
+        .andExpect(jsonPath("$.score").isNumber())
+        .andExpect(jsonPath("$.etaMinutes").isNumber());
   }
 
   @Test
@@ -195,6 +201,64 @@ class CitizenReportControllerTests {
                 .contentType(MediaType.APPLICATION_JSON)
                 .content(sos(UUID.randomUUID().toString(), latitude, longitude)))
         .andExpect(status().isCreated());
+  }
+
+  @Test
+  void photoAndAudioOfAnSosReachOnlyTheAuthority() throws Exception {
+    String emergencyId = emergency();
+    zone(emergencyId, "Sector Alto Perú", null);
+    String id = UUID.randomUUID().toString();
+    send(sos(id, latitude, longitude)).andExpect(status().isCreated());
+    String photo = UUID.randomUUID().toString();
+
+    attach(id, photo, "image/jpeg", "foto")
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.attachmentId").value(photo))
+        .andExpect(jsonPath("$.type").value("PHOTO"))
+        .andExpect(jsonPath("$.size").value(4));
+    attach(id, photo, "image/jpeg", "foto").andExpect(status().isOk());
+    attach(id, UUID.randomUUID().toString(), "audio/mp4", "audio")
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.type").value("AUDIO"));
+    attach(id, UUID.randomUUID().toString(), "image/png", "otra")
+        .andExpect(status().isUnprocessableContent())
+        .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON));
+    attach(id, UUID.randomUUID().toString(), "video/mp4", "video")
+        .andExpect(status().isUnprocessableContent());
+    attach(UUID.randomUUID().toString(), UUID.randomUUID().toString(), "image/jpeg", "foto")
+        .andExpect(status().isNotFound());
+
+    String fieldReportId =
+        JsonPath.read(
+            mockMvc
+                .perform(
+                    get("/api/v1/emergencies/" + emergencyId + "/field-reports")
+                        .with(organization.authority()))
+                .andReturn()
+                .getResponse()
+                .getContentAsString(),
+            "$[0].id");
+    String attachments = "/api/v1/field-reports/" + fieldReportId + "/attachments";
+    mockMvc.perform(get(attachments)).andExpect(status().isUnauthorized());
+    mockMvc
+        .perform(get(attachments).with(organization.authority()))
+        .andExpect(status().isOk())
+        .andExpect(jsonPath("$[*].type").value(contains("PHOTO", "AUDIO")));
+    mockMvc
+        .perform(get(attachments + "/" + photo).with(organization.authority()))
+        .andExpect(status().isOk())
+        .andExpect(content().contentType("image/jpeg"))
+        .andExpect(content().bytes("foto".getBytes(StandardCharsets.UTF_8)));
+  }
+
+  private ResultActions attach(String sosId, String attachmentId, String type, String content)
+      throws Exception {
+    return mockMvc.perform(
+        multipart(HttpMethod.PUT, SOS_PATH + "/" + sosId + "/attachments/" + attachmentId)
+            .file(
+                new MockMultipartFile(
+                    "file", "evidencia", type, content.getBytes(StandardCharsets.UTF_8)))
+            .header("X-Forwarded-For", address));
   }
 
   private ResultActions send(String body) throws Exception {

@@ -4,26 +4,30 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * How the SOS of a citizen is being attended. It tells nothing about other reports or people,
- * nor the urgency score of its zone: like the public view, it does not reveal the internal
- * variables of the prioritization (TS-C02, R-04).
+ * How the SOS of a citizen is being attended, as "Mis reportes" shows it (A_05): prioritized by
+ * the AI with the Urgency Score of its zone, and the brigade on the way with its ETA. It tells
+ * nothing about other reports or people.
  *
- * @param etaMinutes minutes until the brigade arrives, when they can be estimated
+ * @param score urgency score of the zone, from 0 to 100, once the SOS is prioritized
+ * @param etaMinutes minutes until the brigade arrives, while it is on the way and both its base
+ *     and the zone have coordinates
  */
-public record CitizenReportProgress(Stage stage, Optional<Integer> etaMinutes) {
+public record CitizenReportProgress(
+    Stage stage, Optional<Double> score, Optional<Integer> etaMinutes) {
 
   public CitizenReportProgress {
     Objects.requireNonNull(stage, "stage");
+    Objects.requireNonNull(score, "score");
     Objects.requireNonNull(etaMinutes, "etaMinutes");
   }
 
-  /** The stages that the citizen sees. */
+  /** The stages that the citizen sees once the SOS reached the API. */
   public enum Stage {
-    /** Stored, pending review or without a zone yet. */
+    /** Stored, but not prioritized yet: without a zone, or its zone has no score. */
     RECEIVED,
-    /** In a zone that has an urgency score or a manual priority. */
+    /** In a zone that has an urgency score or a manual priority ("Priorizado por IA"). */
     PRIORITIZED,
-    /** In a zone with an approved plan that a brigade took. */
+    /** In a zone with an approved plan that a brigade took ("Brigada en camino"). */
     BRIGADE_ON_THE_WAY
   }
 }

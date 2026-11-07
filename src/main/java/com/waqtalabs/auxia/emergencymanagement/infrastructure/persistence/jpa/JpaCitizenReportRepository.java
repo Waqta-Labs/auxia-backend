@@ -2,6 +2,7 @@ package com.waqtalabs.auxia.emergencymanagement.infrastructure.persistence.jpa;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.CitizenReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.CitizenReportId;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.CitizenReportRepository;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
@@ -24,5 +25,12 @@ class JpaCitizenReportRepository implements CitizenReportRepository {
   @Override
   public Optional<CitizenReport> findById(CitizenReportId id) {
     return repository.findById(id.value()).map(CitizenReportJpaMapper::toDomain);
+  }
+
+  @Override
+  public Optional<CitizenReport> findByFieldReportId(FieldReportId fieldReportId) {
+    return repository
+        .findByFieldReportId(fieldReportId.value())
+        .map(CitizenReportJpaMapper::toDomain);
   }
 }
