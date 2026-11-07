@@ -22,6 +22,10 @@ class PublicCacheConfiguration implements WebMvcConfigurer {
 
   /** The SOS of a citizen and its progress belong to one person: never cached. */
   static final String CITIZEN_SOS_PATHS = "/api/v1/public/field-reports/**";
+
+  /** The request of a brigadist changes when the organization decides it: never cached. */
+  static final String BRIGADE_REGISTRATION_PATHS = "/api/v1/public/brigade-registrations/**";
+
   static final String CACHE_CONTROL =
       CacheControl.maxAge(Duration.ofSeconds(60)).cachePublic().getHeaderValue();
 
@@ -38,6 +42,6 @@ class PublicCacheConfiguration implements WebMvcConfigurer {
               }
             })
         .addPathPatterns(PUBLIC_PATHS)
-        .excludePathPatterns(CITIZEN_SOS_PATHS);
+        .excludePathPatterns(CITIZEN_SOS_PATHS, BRIGADE_REGISTRATION_PATHS);
   }
 }

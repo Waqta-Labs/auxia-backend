@@ -9,6 +9,8 @@ public record BrigadeResource(
     UUID id,
     UUID organizationId,
     String name,
+    @Schema(description = "What a brigadist writes to register (A_02)", example = "BRG-ALFA-07")
+        String code,
     LocationResource baseLocation,
     BrigadeStatus status,
     @Schema(description = "A brigade needs a LEADER to be assigned to a plan") boolean hasLeader,

@@ -57,7 +57,13 @@ class SecurityConfiguration {
             authorize ->
                 authorize
                     .requestMatchers(
-                        HttpMethod.POST, "/api/v1/auth/sign-in", "/api/v1/organizations")
+                        HttpMethod.POST,
+                        "/api/v1/auth/sign-in",
+                        "/api/v1/auth/device-sign-in",
+                        "/api/v1/organizations")
+                    .permitAll()
+                    // Brigadists that register from the app (A_02) and ask for its status.
+                    .requestMatchers(HttpMethod.PUT, "/api/v1/public/brigade-registrations/*")
                     .permitAll()
                     .requestMatchers(HttpMethod.PATCH, "/api/v1/organizations/*/status")
                     .permitAll()

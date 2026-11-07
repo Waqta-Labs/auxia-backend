@@ -80,6 +80,9 @@ auxia:
       window: ${SOS_RATE_LIMIT_WINDOW:10m}
     # Private container of the photos and audios of the SOS, in the account of the evidence.
     attachments-container: ${SOS_ATTACHMENTS_CONTAINER:sos-attachments}
+  brigade-registrations:
+    # Private container of the photos of the cards of the brigadists that register (A_02).
+    id-cards-container: ${BRIGADE_ID_CARDS_CONTAINER:brigade-id-cards}
   evidence-storage:
     # Azure Blob Storage, or Azurite for local development (see the README).
     connection-string: ${AZURE_STORAGE_CONNECTION_STRING}

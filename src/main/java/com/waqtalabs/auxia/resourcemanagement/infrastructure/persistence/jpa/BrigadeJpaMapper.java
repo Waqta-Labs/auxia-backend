@@ -26,6 +26,7 @@ final class BrigadeJpaMapper {
         new BrigadeId(entity.id),
         new OrganizationId(entity.organizationId),
         entity.name,
+        entity.code,
         new Location(entity.baseLatitude, entity.baseLongitude),
         entity.status,
         entity.members.stream()
@@ -59,6 +60,7 @@ final class BrigadeJpaMapper {
     entity.id = brigade.id().value();
     entity.organizationId = brigade.organizationId().value();
     entity.name = brigade.name();
+    entity.code = brigade.code();
     entity.baseLatitude = brigade.baseLocation().latitude();
     entity.baseLongitude = brigade.baseLocation().longitude();
     entity.status = brigade.status();

@@ -27,7 +27,8 @@ public final class BrigadeResourceAssembler {
     return new CreateBrigadeCommand(
         organizationId,
         request.name(),
-        new Location(base.latitude(), base.longitude()));
+        new Location(base.latitude(), base.longitude()),
+        request.code());
   }
 
   public static AddStaffMemberCommand toCommand(
@@ -47,6 +48,7 @@ public final class BrigadeResourceAssembler {
         brigade.id().value(),
         brigade.organizationId().value(),
         brigade.name(),
+        brigade.code(),
         new LocationResource(base.latitude(), base.longitude()),
         brigade.status(),
         brigade.hasLeader(),

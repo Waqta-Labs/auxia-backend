@@ -1,19 +1,24 @@
 package com.waqtalabs.auxia.resourcemanagement.interfaces.acl;
 
+import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.AddStaffMemberCommandHandler;
 import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.AssignBrigadeCommandHandler;
 import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.ChangeReservationCommandHandler;
 import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.ReleaseReservationCommandHandler;
 import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.ReserveResourcesCommandHandler;
+import com.waqtalabs.auxia.resourcemanagement.application.commands.AddStaffMemberCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.AssignBrigadeCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.ChangeReservationCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.ReleaseReservationCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.ReserveResourcesCommand;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Brigade;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.BrigadeId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.DistributionPlanId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Location;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ReservationLine;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ResourceId;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.StaffRole;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.UserId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.resourcemanagement.domain.repositories.BrigadeRepository;
 import com.waqtalabs.auxia.resourcemanagement.domain.repositories.InventoryRepository;
@@ -43,6 +48,7 @@ public class ResourceManagementContextFacade {
   private final ChangeReservationCommandHandler changeReservation;
   private final ReleaseReservationCommandHandler releaseReservation;
   private final AssignBrigadeCommandHandler assignBrigade;
+  private final AddStaffMemberCommandHandler addStaffMember;
 
   public ResourceManagementContextFacade(
       InventoryRepository inventoryRepository,
@@ -50,13 +56,47 @@ public class ResourceManagementContextFacade {
       ReserveResourcesCommandHandler reserveResources,
       ChangeReservationCommandHandler changeReservation,
       ReleaseReservationCommandHandler releaseReservation,
-      AssignBrigadeCommandHandler assignBrigade) {
+      AssignBrigadeCommandHandler assignBrigade,
+      AddStaffMemberCommandHandler addStaffMember) {
     this.inventoryRepository = inventoryRepository;
     this.brigadeRepository = brigadeRepository;
     this.reserveResources = reserveResources;
     this.changeReservation = changeReservation;
     this.releaseReservation = releaseReservation;
     this.assignBrigade = assignBrigade;
+    this.addStaffMember = addStaffMember;
+  }
+
+  /**
+   * The brigade with a code, which a brigadist writes to register (A_02), ignoring case; empty
+   * when no brigade has it.
+   */
+  @Transactional(readOnly = true)
+  public Optional<BrigadeReferenceResource> findBrigadeByCode(String code) {
+    return brigadeRepository
+        .findByCode(Brigade.normalizeCode(code))
+        .map(
+            brigade ->
+                new BrigadeReferenceResource(
+                    brigade.id().value(), brigade.organizationId().value(), brigade.name()));
+  }
+
+  /**
+   * Adds an approved brigadist to the brigade as a {@code VOLUNTEER} linked to their
+   * FIELD_BRIGADE account, so the app shows them its missions. Runs in the transaction of the
+   * approval.
+   */
+  @Transactional
+  public void addBrigadist(
+      UUID brigadeId, UUID organizationId, String fullName, String phone, UUID userId) {
+    addStaffMember.handle(
+        new AddStaffMemberCommand(
+            new BrigadeId(brigadeId),
+            new OrganizationId(organizationId),
+            fullName,
+            StaffRole.VOLUNTEER,
+            phone,
+            new UserId(userId)));
   }
 
   /** Resources of the inventory of an organization; empty when it has no inventory. */

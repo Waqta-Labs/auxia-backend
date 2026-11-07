@@ -66,6 +66,24 @@ class BrigadeUseCasesTests {
   }
 
   @Test
+  void brigadeCodeIsGeneratedOrGivenAndUniqueInThePlatform() {
+    Brigade generated = create();
+    Brigade given =
+        create.handle(
+            new CreateBrigadeCommand(organization, "Brigada Alfa", CHOSICA, " brg-alfa-07 "));
+    var otherOrganization = new OrganizationId(UUID.randomUUID());
+
+    assertThat(generated.code()).matches("BRG-[0-9A-F]{8}");
+    assertThat(given.code()).isEqualTo("BRG-ALFA-07");
+    assertThat(brigades.findByCode("BRG-ALFA-07")).contains(given);
+    assertThatThrownBy(
+            () ->
+                create.handle(
+                    new CreateBrigadeCommand(otherOrganization, "Alfa", CHOSICA, "BRG-ALFA-07")))
+        .isInstanceOf(DuplicateBrigadeException.class);
+  }
+
+  @Test
   void membersAreAddedAndRemoved() {
     Brigade brigade = create();
 

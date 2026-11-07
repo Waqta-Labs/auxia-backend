@@ -57,6 +57,12 @@ class JpaBrigadeRepository implements BrigadeRepository {
 
   @Override
   @Transactional(readOnly = true)
+  public Optional<Brigade> findByCode(String code) {
+    return repository.findByCode(code).map(BrigadeJpaMapper::toDomain);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
   public Optional<Brigade> findByMemberAccount(UserId userId) {
     return repository.findByMembersUserId(userId.value()).map(BrigadeJpaMapper::toDomain);
   }
