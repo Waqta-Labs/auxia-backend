@@ -132,6 +132,7 @@ blockchain are configured with environment variables:
 | `BLOCKCHAIN_PRIVATE_KEY` | Private key of the wallet that owns `DeliveryRegistry`: only it can register deliveries. It pays the gas of each anchoring (SepoliaETH). Required |
 | `BLOCKCHAIN_CONTRACT_ADDRESS` | Address of `DeliveryRegistry`. Default the Sepolia deployment, `0xe678347E182cbf00031401C97284AaB1C6b8148c` |
 | `BLOCKCHAIN_CHAIN_ID` | Network of the transactions. Default `11155111` (Sepolia) |
+| `SOS_RATE_LIMIT_MAX_REPORTS` / `SOS_RATE_LIMIT_WINDOW` | New SOS that one address can send to `POST /api/v1/public/field-reports` in a period. Default `10` every `10m` |
 | `CORS_ALLOWED_ORIGINS` | Origins of the web application that may call the API from the browser, separated by commas. Default `http://localhost:5173,http://localhost:3000` (Vite and Next.js dev servers) |
 
 For local development, copy `.env.example` to `.env` and fill in the values.
@@ -171,6 +172,7 @@ application starts.
 | V7 | `field_reports`: the indicators corrected by an authority, next to those of the NLP, with who, when and why (US-03). `zones`: the manual priority with who, when and why (US-07). |
 | V8 | `stock_alerts`: low stock alerts, one open at most per resource (US-10). |
 | V9 | `zones.responsible_authority_id`; `zone_decisions`, the history of decisions of each zone, with the decisions the data already kept (US-20); `shift_handovers` and their zones (US-23). |
+| V10 | `citizen_reports`: the SOS of citizens from the mobile app, identified by the id the phone generates, with the field report each one became. |
 
 Neon already had the schema of V1 when Flyway was added, so on Neon V1 is
 recorded as the baseline (`baseline-on-migrate`) and only V2 onwards run. An
@@ -508,6 +510,39 @@ otherwise).
   Emergency Management (`EmergencyRegistered`, `ZoneRegistered`, the score,
   `DistributionPlanApproved`) and of Traceability (`DeliveryInitiated`,
   `DeliveryConfirmed`, `DeliveryCertified`) after their commit.
+
+### Citizen SOS (Emergency Management)
+
+The mobile app sends the SOS of citizens without signing in, and keeps each one
+in a queue until the API confirms it.
+
+| Method and path | Description |
+|---|---|
+| `POST /api/v1/public/field-reports` | Send an SOS (JSON). `201` the first time, `200` when its `clientReportId` was already stored. |
+| `GET /api/v1/public/field-reports/{clientReportId}` | Progress of an SOS: `status`, `score` and `etaMinutes`. `404` when it does not exist. |
+
+- The phone generates `clientReportId` (a UUID), so a retry never stores the
+  SOS twice. `source` is always `CITIZEN`, whatever the request says.
+- The SOS becomes a field report of source `CITIZEN`, pending review like any
+  other, and the NLP structures it. It goes to the active emergency and the zone
+  nearest to its `location`, up to 5 km away; up to 50 km it goes to the
+  emergency of that zone, pending zone assignment. Without `location`, or
+  farther, it goes to the only active emergency if there is just one. Otherwise
+  it is kept without a field report, so it is never lost.
+- An SOS with `relatedReportId` adds detail to an earlier one and goes to the
+  same emergency and zone.
+- `status` is `RECEIVED` while the SOS has no zone or its zone has no score,
+  `PRIORITIZED` once the zone has a score or a manual priority, and
+  `BRIGADE_ON_THE_WAY` once a brigade took an approved plan of the zone.
+  `score` is always `null`: like the public view, the API does not reveal the
+  internal variables of the prioritization (TS-C02, R-04). `etaMinutes` is
+  `null` until the brigades report their position.
+- Each address can send 10 new SOS every 10 minutes, generous because in a
+  disaster many people share one (the NAT of a mobile operator, the Wi-Fi of a
+  shelter). Over the limit the answer is `429` with `Retry-After`; a retry of a
+  stored SOS does not count. The address is the last one of `X-Forwarded-For`,
+  which Azure App Service appends.
+- Never cached, unlike the public view.
 
 ### Identity Access
 
