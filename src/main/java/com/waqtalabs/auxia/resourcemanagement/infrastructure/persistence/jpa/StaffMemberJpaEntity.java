@@ -31,5 +31,8 @@ class StaffMemberJpaEntity {
 
   String phone;
 
+  @Column(name = "user_id")
+  UUID userId;
+
   protected StaffMemberJpaEntity() {}
 }

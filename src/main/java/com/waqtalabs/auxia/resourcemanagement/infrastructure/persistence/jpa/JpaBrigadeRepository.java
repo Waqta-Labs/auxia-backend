@@ -4,6 +4,7 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Brigade;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.BrigadeId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.DistributionPlanId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.UserId;
 import com.waqtalabs.auxia.resourcemanagement.domain.repositories.BrigadeRepository;
 import java.util.List;
 import java.util.Optional;
@@ -52,5 +53,11 @@ class JpaBrigadeRepository implements BrigadeRepository {
     return repository
         .findByAssignmentsDistributionPlanId(planId.value())
         .map(BrigadeJpaMapper::toDomain);
+  }
+
+  @Override
+  @Transactional(readOnly = true)
+  public Optional<Brigade> findByMemberAccount(UserId userId) {
+    return repository.findByMembersUserId(userId.value()).map(BrigadeJpaMapper::toDomain);
   }
 }
