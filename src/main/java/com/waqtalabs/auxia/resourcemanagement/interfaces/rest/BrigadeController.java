@@ -116,6 +116,8 @@ public class BrigadeController {
   @ApiResponse(responseCode = "201", description = "Member added; the brigade is returned")
   @ApiResponse(responseCode = "400", description = "Invalid request")
   @ApiResponse(responseCode = "404", description = "Not a brigade of the organization")
+  @ApiResponse(responseCode = "409", description = "The account is in another brigade")
+  @ApiResponse(responseCode = "422", description = "Not an active brigadist of the organization")
   public ResponseEntity<BrigadeResource> addMember(
       @PathVariable UUID brigadeId,
       @Valid @RequestBody AddStaffMemberRequest request,

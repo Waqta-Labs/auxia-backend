@@ -4,6 +4,7 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Brigade;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.BrigadeId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.DistributionPlanId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.UserId;
 import com.waqtalabs.auxia.resourcemanagement.domain.repositories.BrigadeRepository;
 import java.util.Comparator;
 import java.util.LinkedHashMap;
@@ -41,6 +42,16 @@ public class InMemoryBrigadeRepository implements BrigadeRepository {
         .filter(
             brigade ->
                 brigade.assignments().stream().anyMatch(assignment -> assignment.isFor(planId)))
+        .findFirst();
+  }
+
+  @Override
+  public Optional<Brigade> findByMemberAccount(UserId userId) {
+    return brigades.values().stream()
+        .filter(
+            brigade ->
+                brigade.members().stream()
+                    .anyMatch(member -> member.userId().filter(userId::equals).isPresent()))
         .findFirst();
   }
 }

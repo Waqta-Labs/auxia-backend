@@ -4,6 +4,7 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Brigade;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.BrigadeId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.DistributionPlanId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.UserId;
 import java.util.List;
 import java.util.Optional;
 
@@ -18,4 +19,7 @@ public interface BrigadeRepository {
 
   /** The brigade assigned to the plan, whether its assignment is in progress or completed. */
   Optional<Brigade> findByAssignedPlan(DistributionPlanId planId);
+
+  /** The brigade that has the account among its members. */
+  Optional<Brigade> findByMemberAccount(UserId userId);
 }

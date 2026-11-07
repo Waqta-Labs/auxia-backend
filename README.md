@@ -175,6 +175,7 @@ application starts.
 | V9 | `zones.responsible_authority_id`; `zone_decisions`, the history of decisions of each zone, with the decisions the data already kept (US-20); `shift_handovers` and their zones (US-23). |
 | V10 | `citizen_reports`: the SOS of citizens from the mobile app, identified by the id the phone generates, with the field report each one became. |
 | V11 | `citizen_report_attachments`: the photo and the audio of each SOS (A_04), at most one of each. |
+| V12 | `staff_members.user_id`: the `FIELD_BRIGADE` account of a member, in one brigade at most (A_07). |
 
 Neon already had the schema of V1 when Flyway was added, so on Neon V1 is
 recorded as the baseline (`baseline-on-migrate`) and only V2 onwards run. An
@@ -422,9 +423,10 @@ otherwise).
 | `POST /api/v1/brigades` | Create a brigade of the organization of the user, with its base location. It starts `AVAILABLE`. |
 | `GET /api/v1/brigades?status=` | Brigades of the organization of the user by name, optionally by status. |
 | `GET /api/v1/brigades/{id}` | One brigade with its members and its assignment in progress. |
-| `POST /api/v1/brigades/{id}/members` | Add a member (`LEADER`, `DRIVER`, `MEDIC` or `VOLUNTEER`). |
+| `POST /api/v1/brigades/{id}/members` | Add a member (`LEADER`, `DRIVER`, `MEDIC` or `VOLUNTEER`), optionally with the `userId` of its `FIELD_BRIGADE` account. |
 | `DELETE /api/v1/brigades/{id}/members/{memberId}` | Remove a member. |
 | `PATCH /api/v1/brigades/{id}/availability` | Put the brigade `AVAILABLE` or `OFF_DUTY`. |
+| `GET /api/v1/me/missions` | Missions of the brigade of the signed-in `FIELD_BRIGADE` (A_07). |
 
 - Brigade names are unique per organization (409). A brigade of another
   organization answers 404.
@@ -434,6 +436,16 @@ otherwise).
   the plan is registered.
 - While a brigade is assigned, its availability cannot change (409) and its last
   leader cannot be removed (422). `ASSIGNED` is never set by hand (422).
+- A member with a `userId` is the account that signs in to the mobile app. It
+  must be an active `FIELD_BRIGADE` of the organization (422) and is a member of
+  one brigade at most (409).
+- `GET /api/v1/me/missions` lists the assignments of the brigade of that
+  account: the one in progress first (`ASSIGNED`), then the completed ones.
+  Each mission carries its delivery to register, the zone with its score, the
+  reasons of the score, the vulnerable people and its coordinates, the distance
+  and travel time from the base of the brigade at 30 km/h, and the resources
+  with their names. `category` is `MEDICAL` when the plan carries medicine,
+  else `SUPPLIES`. An account outside every brigade gets an empty list.
 
 ### Deliveries (Traceability)
 
