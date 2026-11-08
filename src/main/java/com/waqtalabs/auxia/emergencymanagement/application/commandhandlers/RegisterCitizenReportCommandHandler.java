@@ -32,7 +32,8 @@ import org.springframework.transaction.annotation.Transactional;
  * an active emergency, by its location, and registered as a field report of source CITIZEN, pending
  * review like any other: its NLP structuring starts with FieldReportRegistered. An SOS that adds
  * detail to an earlier one goes to the same emergency and zone as the earlier one. An SOS that
- * cannot be placed is kept anyway, so it is never lost.
+ * cannot be placed is kept anyway, so it is never lost. An SOS relayed by Mesh is registered the
+ * same way: it only counts in its own limit.
  */
 @Service
 public class RegisterCitizenReportCommandHandler {
@@ -80,7 +81,7 @@ public class RegisterCitizenReportCommandHandler {
     if (stored.isPresent()) {
       return new Registration(stored.get(), false);
     }
-    rateLimiter.acquire(command.sender());
+    rateLimiter.acquire(command.sender(), command.relayed());
 
     LocalDateTime receivedAt = LocalDateTime.now(clock);
     LocalDateTime reportedAt = LocalDateTime.ofInstant(command.reportedAt(), clock.getZone());

@@ -78,6 +78,11 @@ auxia:
     rate-limit:
       max-reports: ${SOS_RATE_LIMIT_MAX_REPORTS:10}
       window: ${SOS_RATE_LIMIT_WINDOW:10m}
+    # SOS that a phone uploads for its neighbors after receiving them by Mesh (A_05, A_06): one
+    # phone with signal sends the SOS of many, so they count apart in a wider limit.
+    relay-rate-limit:
+      max-reports: ${SOS_RELAY_RATE_LIMIT_MAX_REPORTS:60}
+      window: ${SOS_RELAY_RATE_LIMIT_WINDOW:10m}
     # Private container of the photos and audios of the SOS, in the account of the evidence.
     attachments-container: ${SOS_ATTACHMENTS_CONTAINER:sos-attachments}
   brigade-registrations:

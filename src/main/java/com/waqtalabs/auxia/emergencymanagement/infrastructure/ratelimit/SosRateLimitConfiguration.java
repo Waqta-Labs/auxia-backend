@@ -8,11 +8,14 @@ import org.springframework.context.annotation.Configuration;
 
 /** Limit of new SOS that one address can send to the public endpoint. */
 @Configuration(proxyBeanMethods = false)
-@EnableConfigurationProperties(SosRateLimitProperties.class)
+@EnableConfigurationProperties({SosRateLimitProperties.class, RelaySosRateLimitProperties.class})
 class SosRateLimitConfiguration {
 
   @Bean
-  SosRateLimiter sosRateLimiter(SosRateLimitProperties properties, Clock clock) {
-    return new InMemorySosRateLimiter(properties.maxReports(), properties.window(), clock);
+  SosRateLimiter sosRateLimiter(
+      SosRateLimitProperties direct, RelaySosRateLimitProperties relayed, Clock clock) {
+    return new SosRateLimits(
+        new InMemorySosRateLimiter(direct.maxReports(), direct.window(), clock),
+        new InMemorySosRateLimiter(relayed.maxReports(), relayed.window(), clock));
   }
 }

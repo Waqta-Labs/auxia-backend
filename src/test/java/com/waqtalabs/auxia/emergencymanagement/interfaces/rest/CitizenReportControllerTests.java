@@ -216,6 +216,13 @@ class CitizenReportControllerTests {
   }
 
   @Test
+  void relayOfMoreThanThreeHopsIsRejected() throws Exception {
+    send(relayed(sos(UUID.randomUUID().toString(), latitude, longitude), 4))
+        .andExpect(status().isBadRequest())
+        .andExpect(jsonPath("$.errors[*].field").value(contains("relay.hops")));
+  }
+
+  @Test
   void unknownCategoryOrMalformedIdIsRejected() throws Exception {
     String id = UUID.randomUUID().toString();
     send(sos(id, latitude, longitude).replace("\"MEDICAL\"", "\"FIRE\""))
@@ -247,6 +254,9 @@ class CitizenReportControllerTests {
         .andExpect(content().contentTypeCompatibleWith(MediaType.APPLICATION_PROBLEM_JSON))
         .andExpect(jsonPath("$.status").value(429));
     send(sos(first, latitude, longitude)).andExpect(status().isOk());
+    send(relayed(sos(UUID.randomUUID().toString(), latitude, longitude), 2))
+        .andExpect(status().isCreated())
+        .andExpect(jsonPath("$.status").value("RECEIVED"));
     mockMvc
         .perform(
             post(SOS_PATH)
@@ -336,6 +346,13 @@ class CitizenReportControllerTests {
         }
         """
         .formatted(id, TEXT, latitude, longitude);
+  }
+
+  /** The SOS as the phone that received it by Mesh uploads it. */
+  private static String relayed(String sos, int hops) {
+    return sos.replace(
+        "\"source\": \"CITIZEN\",",
+        "\"source\": \"CITIZEN\", \"relay\": { \"hops\": %d },".formatted(hops));
   }
 
   private String emergency() throws Exception {

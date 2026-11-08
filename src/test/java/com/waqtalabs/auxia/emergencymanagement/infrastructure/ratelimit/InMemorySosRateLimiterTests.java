@@ -3,6 +3,7 @@ package com.waqtalabs.auxia.emergencymanagement.infrastructure.ratelimit;
 import static org.assertj.core.api.Assertions.assertThatCode;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
+import com.waqtalabs.auxia.emergencymanagement.application.ports.SosRateLimiter;
 import com.waqtalabs.auxia.shared.application.exceptions.RateLimitExceededException;
 import java.time.Clock;
 import java.time.Duration;
@@ -31,6 +32,24 @@ class InMemorySosRateLimiterTests {
 
     clock.advance(Duration.ofMinutes(6));
     assertThatCode(() -> limiter.acquire("190.12.4.7")).doesNotThrowAnyException();
+  }
+
+  @Test
+  void sosRelayedByMeshCountApartInAWiderLimit() {
+    SosRateLimiter limits =
+        new SosRateLimits(limiter, new InMemorySosRateLimiter(5, Duration.ofMinutes(10), clock));
+    for (int sent = 0; sent < 3; sent++) {
+      limits.acquire("190.12.4.7", false);
+    }
+
+    for (int sent = 0; sent < 5; sent++) {
+      limits.acquire("190.12.4.7", true);
+    }
+
+    assertThatThrownBy(() -> limits.acquire("190.12.4.7", false))
+        .isInstanceOf(RateLimitExceededException.class);
+    assertThatThrownBy(() -> limits.acquire("190.12.4.7", true))
+        .isInstanceOf(RateLimitExceededException.class);
   }
 
   @Test

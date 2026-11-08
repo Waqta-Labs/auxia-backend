@@ -29,7 +29,8 @@ public final class CitizenReportResourceAssembler {
         people(request.people()),
         request.accessConditions() == null ? Set.of() : Set.copyOf(request.accessConditions()),
         Optional.ofNullable(request.relatedReportId()).map(CitizenReportId::new),
-        sender);
+        sender,
+        request.relay() != null);
   }
 
   private static VulnerablePeople people(VulnerablePeopleResource people) {
