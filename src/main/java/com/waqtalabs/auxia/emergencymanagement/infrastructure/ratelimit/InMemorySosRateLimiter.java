@@ -1,6 +1,5 @@
 package com.waqtalabs.auxia.emergencymanagement.infrastructure.ratelimit;
 
-import com.waqtalabs.auxia.emergencymanagement.application.ports.SosRateLimiter;
 import com.waqtalabs.auxia.shared.application.exceptions.RateLimitExceededException;
 import java.time.Clock;
 import java.time.Duration;
@@ -15,7 +14,7 @@ import java.util.Map;
  * {@code window}. The API runs as a single instance, so the memory of the process is enough; a
  * restart forgets the counts, which only makes the limit more lenient.
  */
-class InMemorySosRateLimiter implements SosRateLimiter {
+class InMemorySosRateLimiter {
 
   /** Above this many addresses, the ones without recent SOS are forgotten. */
   private static final int SENDERS_BEFORE_CLEANUP = 10_000;
@@ -31,8 +30,7 @@ class InMemorySosRateLimiter implements SosRateLimiter {
     this.clock = clock;
   }
 
-  @Override
-  public synchronized void acquire(String sender) {
+  synchronized void acquire(String sender) {
     Instant now = clock.instant();
     Instant windowStart = now.minus(window);
     if (sentBySender.size() > SENDERS_BEFORE_CLEANUP) {

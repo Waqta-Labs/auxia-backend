@@ -41,4 +41,10 @@ public record RegisterCitizenReportRequest(
         @Size(max = 4)
         List<@NotNull AccessCondition> accessConditions,
     @Schema(description = "clientReportId of the earlier SOS this one adds detail to")
-        UUID relatedReportId) {}
+        UUID relatedReportId,
+    @Schema(
+            description =
+                "Only when the phone uploads an SOS that another phone passed to it by Mesh;"
+                    + " omitted when it uploads its own")
+        @Valid
+        SosRelayResource relay) {}

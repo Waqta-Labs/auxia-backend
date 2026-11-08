@@ -72,7 +72,7 @@ class SosAttachmentUseCasesTests {
           citizenReports,
           attachments,
           storage,
-          sender -> {
+          (sender, relayed) -> {
             if (limitReached) {
               throw new RateLimitExceededException(Duration.ofMinutes(1));
             }

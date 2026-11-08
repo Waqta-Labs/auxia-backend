@@ -74,7 +74,7 @@ public class AttachToCitizenReportCommandHandler {
     if (alreadyHasOne) {
       throw new InvalidSosAttachmentException("the SOS already has a " + type);
     }
-    rateLimiter.acquire(command.sender());
+    rateLimiter.acquire(command.sender(), false);
 
     String contentType = AttachmentType.normalize(command.contentType());
     String storageUrl =

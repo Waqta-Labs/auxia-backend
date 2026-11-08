@@ -17,6 +17,7 @@ import java.util.Set;
  * @param location empty when the phone had no GPS
  * @param relatedReportId earlier SOS this one adds detail to
  * @param sender address of the client, for the limit of SOS per sender
+ * @param relayed whether another phone passed the SOS by Mesh to the one that uploads it
  */
 public record RegisterCitizenReportCommand(
     CitizenReportId clientReportId,
@@ -27,7 +28,32 @@ public record RegisterCitizenReportCommand(
     VulnerablePeople people,
     Set<AccessCondition> accessConditions,
     Optional<CitizenReportId> relatedReportId,
-    String sender) {
+    String sender,
+    boolean relayed) {
+
+  /** An SOS uploaded by the phone that sent it. */
+  public RegisterCitizenReportCommand(
+      CitizenReportId clientReportId,
+      SosCategory category,
+      String text,
+      Instant reportedAt,
+      Optional<Geolocation> location,
+      VulnerablePeople people,
+      Set<AccessCondition> accessConditions,
+      Optional<CitizenReportId> relatedReportId,
+      String sender) {
+    this(
+        clientReportId,
+        category,
+        text,
+        reportedAt,
+        location,
+        people,
+        accessConditions,
+        relatedReportId,
+        sender,
+        false);
+  }
 
   public RegisterCitizenReportCommand {
     Objects.requireNonNull(clientReportId, "clientReportId");

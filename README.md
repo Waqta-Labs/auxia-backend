@@ -133,6 +133,7 @@ blockchain are configured with environment variables:
 | `BLOCKCHAIN_CONTRACT_ADDRESS` | Address of `DeliveryRegistry`. Default the Sepolia deployment, `0xe678347E182cbf00031401C97284AaB1C6b8148c` |
 | `BLOCKCHAIN_CHAIN_ID` | Network of the transactions. Default `11155111` (Sepolia) |
 | `SOS_RATE_LIMIT_MAX_REPORTS` / `SOS_RATE_LIMIT_WINDOW` | New SOS and SOS files that one address can send in a period. Default `10` every `10m` |
+| `SOS_RELAY_RATE_LIMIT_MAX_REPORTS` / `SOS_RELAY_RATE_LIMIT_WINDOW` | New SOS relayed by Mesh that one address can upload in a period, apart from the limit above. Default `60` every `10m` |
 | `SOS_ATTACHMENTS_CONTAINER` | Private container of the photos and audios of the SOS, in the storage account of the evidence. Default `sos-attachments` |
 | `BRIGADE_ID_CARDS_CONTAINER` | Private container of the photos of the cards of the brigadists that register (A_02). Default `brigade-id-cards` |
 | `CORS_ALLOWED_ORIGINS` | Origins of the web application that may call the API from the browser, separated by commas. Default `http://localhost:5173,http://localhost:3000` (Vite and Next.js dev servers) |
@@ -555,6 +556,11 @@ in a queue until the API confirms it.
   emergency of that zone, pending zone assignment. Without `location`, or
   farther, it goes to the only active emergency if there is just one. Otherwise
   it is kept without a field report, so it is never lost.
+- A phone that received an SOS from another one by Mesh (A_05, A_06) uploads it
+  with `"relay": { "hops": 1 to 3 }`. It is registered like any other, and its
+  `reportedAt` is still the time of the phone that sent it, hours before if
+  needed. As one phone uploads the SOS of many neighbors, the new relayed SOS
+  count in a wider limit of their own.
 - An SOS with `relatedReportId` adds detail to an earlier one and goes to the
   same emergency and zone.
 - `status` is `RECEIVED` while the SOS has no zone or its zone has no score,

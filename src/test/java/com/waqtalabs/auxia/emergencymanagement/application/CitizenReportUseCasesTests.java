@@ -83,11 +83,11 @@ class CitizenReportUseCasesTests {
           emergencies,
           zones,
           fieldReports,
-          sender -> {
+          (sender, relayed) -> {
             if (limitReached) {
               throw new RateLimitExceededException(Duration.ofMinutes(3));
             }
-            acquiredBy.add(sender);
+            acquiredBy.add(relayed ? "relay " + sender : sender);
           },
           CLOCK,
           events::add);
@@ -186,6 +186,31 @@ class CitizenReportUseCasesTests {
     assertThat(citizenReports.count()).isEqualTo(1);
     assertThat(fieldReports.findByEmergencyId(chosica.id())).hasSize(1);
     assertThat(acquiredBy).containsExactly("190.12.4.7");
+  }
+
+  @Test
+  void sosRelayedByMeshIsRegisteredLikeAnyOtherAndCountsInItsOwnLimit() {
+    var original = sos(UUID.randomUUID(), nearAltoPeru());
+    var relayed =
+        new RegisterCitizenReportCommand(
+            original.clientReportId(),
+            original.category(),
+            original.text(),
+            Instant.parse("2026-11-06T09:00:00Z"),
+            original.location(),
+            original.people(),
+            original.accessConditions(),
+            Optional.empty(),
+            "181.65.2.33",
+            true);
+
+    CitizenReport sos = register.handle(relayed).report();
+
+    assertThat(acquiredBy).containsExactly("relay 181.65.2.33");
+    assertThat(sos.reportedAt()).isEqualTo(LocalDateTime.of(2026, 11, 6, 4, 0));
+    assertThat(fieldReports.findById(sos.fieldReportId().orElseThrow()).orElseThrow().zoneId())
+        .contains(altoPeru.id());
+    assertThat(register.handle(original).created()).isFalse();
   }
 
   @Test
