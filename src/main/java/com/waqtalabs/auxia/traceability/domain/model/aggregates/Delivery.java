@@ -18,6 +18,7 @@ import com.waqtalabs.auxia.traceability.domain.model.valueobjects.ResourceId;
 import com.waqtalabs.auxia.traceability.domain.model.valueobjects.UserId;
 import com.waqtalabs.auxia.traceability.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.traceability.domain.services.HashingService;
+import java.time.Duration;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
@@ -41,6 +42,12 @@ import java.util.Set;
  * </ul>
  */
 public final class Delivery {
+
+  /**
+   * How far ahead of the backend the clock of a device may run. Phones drift a few seconds, and a
+   * delivery sent right away would otherwise look later than its own registration.
+   */
+  static final Duration MAX_CLOCK_SKEW = Duration.ofSeconds(30);
 
   private final DeliveryId id;
   private final DistributionPlanId distributionPlanId;
@@ -151,7 +158,8 @@ public final class Delivery {
    * @throws EmptyDeliveryException if no resource was delivered
    * @throws DuplicateDeliveryResourceException if a resource appears twice
    * @throws DuplicateEvidenceException if the same file appears twice
-   * @throws DeliveryDateInFutureException if the delivery is after its registration
+   * @throws DeliveryDateInFutureException if the delivery is after its registration by more than
+   *     {@link #MAX_CLOCK_SKEW}; within it, the delivery takes the time of the registration
    */
   public void register(
       List<DeliveryItem> deliveredItems,
@@ -188,8 +196,12 @@ public final class Delivery {
         });
     LocalDateTime delivered = deliveredAt.truncatedTo(ChronoUnit.SECONDS);
     LocalDateTime received = receivedAt.truncatedTo(ChronoUnit.MICROS);
-    if (delivered.isAfter(received)) {
+    if (delivered.isAfter(received.plus(MAX_CLOCK_SKEW))) {
       throw new DeliveryDateInFutureException(deliveredAt);
+    }
+    if (delivered.isAfter(received)) {
+      // The clock of the device runs a little ahead: the backend's time is the reference.
+      delivered = received.truncatedTo(ChronoUnit.SECONDS);
     }
     items.addAll(deliveredItems);
     evidences.addAll(attachedEvidences);

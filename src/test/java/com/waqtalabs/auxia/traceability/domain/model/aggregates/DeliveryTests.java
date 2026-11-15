@@ -153,6 +153,20 @@ class DeliveryTests {
   }
 
   @Test
+  void aDeviceClockSlightlyAheadTakesTheTimeOfTheRegistration() {
+    var items = List.of(DeliveryItem.of(water, 300));
+    var evidences = List.of(photo("a"));
+    var received = RECEIVED_AT.plusNanos(400_000_000);
+
+    delivery.register(
+        items, evidences, brigadeMember, RECEIVED_AT.plusSeconds(2), received, SHA_256);
+
+    var registration = delivery.registration().orElseThrow();
+    assertThat(registration.deliveredAt()).isEqualTo(RECEIVED_AT);
+    assertThat(registration.deliveredAt()).isBeforeOrEqualTo(registration.receivedAt());
+  }
+
+  @Test
   void deliveryIsRegisteredOnlyOnce() {
     register(List.of(DeliveryItem.of(water, 300)), List.of(photo("a")));
     var items = List.of(DeliveryItem.of(water, 100));
