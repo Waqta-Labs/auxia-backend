@@ -41,6 +41,9 @@ public final class CitizenReportResourceAssembler {
 
   public static CitizenReportStatusResource toResource(CitizenReportProgress progress) {
     return new CitizenReportStatusResource(
-        progress.stage(), progress.score().orElse(null), progress.etaMinutes().orElse(null));
+        progress.stage(),
+        progress.score().orElse(null),
+        progress.etaMinutes().orElse(null),
+        progress.acceptedAt().orElse(null));
   }
 }

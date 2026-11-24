@@ -327,7 +327,7 @@ class CitizenReportUseCasesTests {
     scoreAltoPeru(94.0);
     DistributionPlan plan = approvedPlan();
 
-    assertThat(progress(sos).stage()).isEqualTo(Stage.PRIORITIZED);
+    assertThat(progress(sos).stage()).isEqualTo(Stage.ACCEPTED);
 
     Geolocation sixKilometersAway = new Geolocation(-11.9436, -76.6528);
     brigadeBases.put(plan.id(), sixKilometersAway);
@@ -335,7 +335,10 @@ class CitizenReportUseCasesTests {
     assertThat(progress(sos))
         .isEqualTo(
             new CitizenReportProgress(
-                Stage.BRIGADE_ON_THE_WAY, Optional.of(94.0), Optional.of(12)));
+                Stage.BRIGADE_ON_THE_WAY,
+                Optional.of(94.0),
+                Optional.of(12),
+                Optional.of(LocalDateTime.now(CLOCK))));
   }
 
   @Test

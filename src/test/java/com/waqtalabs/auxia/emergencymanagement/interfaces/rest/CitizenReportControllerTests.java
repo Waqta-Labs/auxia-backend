@@ -141,7 +141,8 @@ class CitizenReportControllerTests {
         .andExpect(status().isOk())
         .andExpect(header().string(HttpHeaders.CACHE_CONTROL, not("max-age=60, public")))
         .andExpect(jsonPath("$.status").value("RECEIVED"))
-        .andExpect(jsonPath("$.length()").value(3));
+        .andExpect(jsonPath("$.acceptedAt").value(nullValue()))
+        .andExpect(jsonPath("$.length()").value(4));
   }
 
   @Test
