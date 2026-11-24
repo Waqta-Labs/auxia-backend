@@ -5,16 +5,21 @@ import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneRankin
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZonesInChargeQuery;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.EmergencyNotFoundException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.ZoneNotFoundException;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.CitizenReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Emergency;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AccessCondition;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
+import com.waqtalabs.auxia.emergencymanagement.domain.repositories.CitizenReportRepository;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.EmergencyRepository;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.FieldReportRepository;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.ZoneRepository;
 import java.util.Comparator;
+import java.util.EnumMap;
 import java.util.EnumSet;
 import java.util.HashMap;
 import java.util.List;
@@ -38,14 +43,17 @@ public class ZoneQueryService {
   private final EmergencyRepository emergencyRepository;
   private final ZoneRepository zoneRepository;
   private final FieldReportRepository fieldReportRepository;
+  private final CitizenReportRepository citizenReportRepository;
 
   public ZoneQueryService(
       EmergencyRepository emergencyRepository,
       ZoneRepository zoneRepository,
-      FieldReportRepository fieldReportRepository) {
+      FieldReportRepository fieldReportRepository,
+      CitizenReportRepository citizenReportRepository) {
     this.emergencyRepository = emergencyRepository;
     this.zoneRepository = zoneRepository;
     this.fieldReportRepository = fieldReportRepository;
+    this.citizenReportRepository = citizenReportRepository;
   }
 
   public Zone handle(GetZoneByIdQuery query) {
@@ -71,23 +79,31 @@ public class ZoneQueryService {
 
   /**
    * Zones of the emergency from the most to the least urgent (US-06). Zones without a score go
-   * last, in registration order.
+   * last, in registration order. Each zone carries the needs of its field reports and how many
+   * SOS of the zone marked each access condition, such as a blocked road.
    */
   public List<ZoneRankingEntry> handle(GetZoneRankingQuery query) {
     if (emergencyRepository.findById(query.emergencyId()).isEmpty()) {
       throw new EmergencyNotFoundException(query.emergencyId());
     }
-    Map<ZoneId, Set<Need>> needs = needsByZone(query);
+    List<FieldReport> reports = fieldReportRepository.findByEmergencyId(query.emergencyId());
+    Map<ZoneId, Set<Need>> needs = needsByZone(reports);
+    Map<ZoneId, Map<AccessCondition, Integer>> access = accessConditionsByZone(reports);
     return zoneRepository.findByEmergencyId(query.emergencyId()).stream()
-        .map(zone -> new ZoneRankingEntry(zone, needs.getOrDefault(zone.id(), Set.of())))
+        .map(
+            zone ->
+                new ZoneRankingEntry(
+                    zone,
+                    needs.getOrDefault(zone.id(), Set.of()),
+                    access.getOrDefault(zone.id(), Map.of())))
         .filter(entry -> matches(entry, query))
         .sorted(BY_URGENCY)
         .toList();
   }
 
-  private Map<ZoneId, Set<Need>> needsByZone(GetZoneRankingQuery query) {
+  private static Map<ZoneId, Set<Need>> needsByZone(List<FieldReport> reports) {
     Map<ZoneId, Set<Need>> needs = new HashMap<>();
-    for (FieldReport report : fieldReportRepository.findByEmergencyId(query.emergencyId())) {
+    for (FieldReport report : reports) {
       if (report.zoneId().isEmpty() || report.structuredData().isEmpty()) {
         continue;
       }
@@ -96,6 +112,26 @@ public class ZoneQueryService {
           .addAll(report.structuredData().get().needs());
     }
     return needs;
+  }
+
+  /** How many SOS of each zone marked each access condition. */
+  private Map<ZoneId, Map<AccessCondition, Integer>> accessConditionsByZone(
+      List<FieldReport> reports) {
+    Map<FieldReportId, ZoneId> zoneOfReport = new HashMap<>();
+    for (FieldReport report : reports) {
+      report.zoneId().ifPresent(zoneId -> zoneOfReport.put(report.id(), zoneId));
+    }
+    Map<ZoneId, Map<AccessCondition, Integer>> access = new HashMap<>();
+    for (CitizenReport sos : citizenReportRepository.findByFieldReportIds(zoneOfReport.keySet())) {
+      ZoneId zoneId = sos.fieldReportId().map(zoneOfReport::get).orElse(null);
+      if (zoneId == null || sos.accessConditions().isEmpty()) {
+        continue;
+      }
+      Map<AccessCondition, Integer> counts =
+          access.computeIfAbsent(zoneId, id -> new EnumMap<>(AccessCondition.class));
+      sos.accessConditions().forEach(condition -> counts.merge(condition, 1, Integer::sum));
+    }
+    return access;
   }
 
   private static boolean matches(ZoneRankingEntry entry, GetZoneRankingQuery query) {

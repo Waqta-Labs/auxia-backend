@@ -4,7 +4,9 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.CitizenRe
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.CitizenReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.CitizenReportRepository;
+import java.util.Collection;
 import java.util.LinkedHashMap;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 
@@ -29,6 +31,13 @@ public class InMemoryCitizenReportRepository implements CitizenReportRepository 
     return reports.values().stream()
         .filter(report -> report.fieldReportId().filter(fieldReportId::equals).isPresent())
         .findFirst();
+  }
+
+  @Override
+  public List<CitizenReport> findByFieldReportIds(Collection<FieldReportId> fieldReportIds) {
+    return reports.values().stream()
+        .filter(report -> report.fieldReportId().filter(fieldReportIds::contains).isPresent())
+        .toList();
   }
 
   public int count() {

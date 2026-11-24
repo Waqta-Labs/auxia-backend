@@ -92,7 +92,11 @@ class ShiftHandoverUseCasesTests {
           events::add,
           CLOCK);
   private final ZoneQueryService queries =
-      new ZoneQueryService(emergencies, zones, new InMemoryFieldReportRepository());
+      new ZoneQueryService(
+          emergencies,
+          zones,
+          new InMemoryFieldReportRepository(),
+          new InMemoryCitizenReportRepository());
 
   private final Emergency emergency = emergencies.save(emergency("Huaico Chosica 2026"));
 

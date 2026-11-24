@@ -4,6 +4,8 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.CitizenRe
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.CitizenReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.FieldReportId;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.CitizenReportRepository;
+import java.util.Collection;
+import java.util.List;
 import java.util.Optional;
 import org.springframework.stereotype.Repository;
 
@@ -32,5 +34,17 @@ class JpaCitizenReportRepository implements CitizenReportRepository {
     return repository
         .findByFieldReportId(fieldReportId.value())
         .map(CitizenReportJpaMapper::toDomain);
+  }
+
+  @Override
+  public List<CitizenReport> findByFieldReportIds(Collection<FieldReportId> fieldReportIds) {
+    if (fieldReportIds.isEmpty()) {
+      return List.of();
+    }
+    return repository
+        .findByFieldReportIdIn(fieldReportIds.stream().map(FieldReportId::value).toList())
+        .stream()
+        .map(CitizenReportJpaMapper::toDomain)
+        .toList();
   }
 }
