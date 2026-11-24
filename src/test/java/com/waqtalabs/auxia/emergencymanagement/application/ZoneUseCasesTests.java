@@ -39,7 +39,8 @@ class ZoneUseCasesTests {
   private final RegisterZoneCommandHandler register =
       new RegisterZoneCommandHandler(emergencies, zones, events::add);
   private final InMemoryFieldReportRepository reports = new InMemoryFieldReportRepository();
-  private final ZoneQueryService queries = new ZoneQueryService(emergencies, zones, reports);
+  private final ZoneQueryService queries =
+      new ZoneQueryService(emergencies, zones, reports, new InMemoryCitizenReportRepository());
 
   private final Emergency emergency =
       emergencies.save(

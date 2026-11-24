@@ -115,7 +115,8 @@ public final class ZoneResourceAssembler {
         score.map(UrgencyScore::value).orElse(null),
         score.map(UrgencyScore::level).orElse(null),
         entry.needs(),
-        manualPriority(zone));
+        manualPriority(zone),
+        entry.accessConditions());
   }
 
   private static ManualPriorityResource manualPriority(Zone zone) {

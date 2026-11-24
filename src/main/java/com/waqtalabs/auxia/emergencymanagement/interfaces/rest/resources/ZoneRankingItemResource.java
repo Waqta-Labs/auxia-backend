@@ -1,10 +1,12 @@
 package com.waqtalabs.auxia.emergencymanagement.interfaces.rest.resources;
 
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.AccessCondition;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DamageLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.Need;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.PriorityLevel;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneStatus;
 import io.swagger.v3.oas.annotations.media.Schema;
+import java.util.Map;
 import java.util.Set;
 import java.util.UUID;
 
@@ -21,4 +23,10 @@ public record ZoneRankingItemResource(
     @Schema(description = "Needs mentioned in the processed field reports of the zone")
         Set<Need> needs,
     @Schema(description = "Not null when an authority prioritized the zone by hand (US-07)")
-        ManualPriorityResource manualPriority) {}
+        ManualPriorityResource manualPriority,
+    @Schema(
+            description =
+                "How many SOS of the zone marked each access condition, such as a blocked road;"
+                    + " conditions that no SOS marked are left out",
+            example = "{\"ROAD_BLOCKED\": 3, \"DAMAGED_BUILDING\": 1}")
+        Map<AccessCondition, Integer> accessConditions) {}

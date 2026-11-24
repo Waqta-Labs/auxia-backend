@@ -86,7 +86,8 @@ class UrgencyScoreUseCasesTests {
       new UpdateZonePopulationImpactCommandHandler(zones, events::add);
   private final CalculateUrgencyScoreCommandHandler calculateScore =
       new CalculateUrgencyScoreCommandHandler(zones, reports, aiService, events::add);
-  private final ZoneQueryService zoneQueries = new ZoneQueryService(emergencies, zones, reports);
+  private final ZoneQueryService zoneQueries =
+      new ZoneQueryService(emergencies, zones, reports, new InMemoryCitizenReportRepository());
   private final FieldReportQueryService reportQueries =
       new FieldReportQueryService(emergencies, zones, reports);
 
