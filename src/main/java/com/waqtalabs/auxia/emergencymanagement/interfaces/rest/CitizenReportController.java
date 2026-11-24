@@ -97,9 +97,10 @@ public class CitizenReportController {
       summary = "Progress of an SOS",
       description =
           "RECEIVED while it has no zone or its zone has no score yet, PRIORITIZED once its zone"
-              + " has a score or a manual priority, and BRIGADE_ON_THE_WAY once a brigade took an"
-              + " approved plan of its zone, with the score of the zone and the ETA of the"
-              + " brigade.")
+              + " has a score or a manual priority, ACCEPTED once an authority approved a plan of"
+              + " its zone after the SOS arrived, and BRIGADE_ON_THE_WAY once a brigade took an"
+              + " approved plan of its zone, with the score of the zone, the time of the approval"
+              + " and the ETA of the brigade.")
   @ApiResponse(responseCode = "200", description = "SOS found")
   @ApiResponse(responseCode = "404", description = "No SOS has that identifier")
   public CitizenReportStatusResource status(@PathVariable UUID clientReportId) {

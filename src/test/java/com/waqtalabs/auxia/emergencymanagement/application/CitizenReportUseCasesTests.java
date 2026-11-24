@@ -327,7 +327,7 @@ class CitizenReportUseCasesTests {
     scoreAltoPeru(94.0);
     DistributionPlan plan = approvedPlan();
 
-    assertThat(progress(sos).stage()).isEqualTo(Stage.PRIORITIZED);
+    assertThat(progress(sos).stage()).isEqualTo(Stage.ACCEPTED);
 
     Geolocation sixKilometersAway = new Geolocation(-11.9436, -76.6528);
     brigadeBases.put(plan.id(), sixKilometersAway);
@@ -335,7 +335,48 @@ class CitizenReportUseCasesTests {
     assertThat(progress(sos))
         .isEqualTo(
             new CitizenReportProgress(
-                Stage.BRIGADE_ON_THE_WAY, Optional.of(94.0), Optional.of(12)));
+                Stage.BRIGADE_ON_THE_WAY,
+                Optional.of(94.0),
+                Optional.of(12),
+                Optional.of(LocalDateTime.now(CLOCK))));
+  }
+
+  @Test
+  void sosOfAZoneWhosePlanAnAuthorityApprovedIsAcceptedAtTheTimeOfTheApproval() {
+    CitizenReport sos = register.handle(sos(UUID.randomUUID(), nearAltoPeru())).report();
+    scoreAltoPeru(94.0);
+    LocalDateTime approvedAt = LocalDateTime.now(CLOCK).plusMinutes(25);
+    approvedPlan(approvedAt);
+
+    assertThat(progress(sos))
+        .isEqualTo(
+            new CitizenReportProgress(
+                Stage.ACCEPTED, Optional.of(94.0), Optional.empty(), Optional.of(approvedAt)));
+  }
+
+  @Test
+  void planApprovedBeforeTheSosArrivedDoesNotAcceptIt() {
+    scoreAltoPeru(94.0);
+    approvedPlan(LocalDateTime.now(CLOCK).minusHours(1));
+
+    CitizenReport sos = register.handle(sos(UUID.randomUUID(), nearAltoPeru())).report();
+
+    assertThat(progress(sos))
+        .isEqualTo(
+            new CitizenReportProgress(Stage.PRIORITIZED, Optional.of(94.0), Optional.empty()));
+  }
+
+  @Test
+  void sosIsNoLongerAcceptedOnceThePlanOfItsZoneWasDelivered() {
+    CitizenReport sos = register.handle(sos(UUID.randomUUID(), nearAltoPeru())).report();
+    scoreAltoPeru(94.0);
+    DistributionPlan plan = approvedPlan();
+
+    plan.markExecuted();
+    plans.save(plan);
+
+    assertThat(progress(sos).stage()).isEqualTo(Stage.PRIORITIZED);
+    assertThat(progress(sos).acceptedAt()).isEmpty();
   }
 
   @Test
@@ -441,6 +482,10 @@ class CitizenReportUseCasesTests {
   }
 
   private DistributionPlan approvedPlan() {
+    return approvedPlan(LocalDateTime.now(CLOCK));
+  }
+
+  private DistributionPlan approvedPlan(LocalDateTime approvedAt) {
     DistributionPlan plan =
         DistributionPlan.propose(
             chosica.id(),
@@ -451,7 +496,7 @@ class CitizenReportUseCasesTests {
             "Proporcional al score",
             "rules-v1",
             LocalDateTime.now(CLOCK));
-    plan.approve(new AuthorityId(UUID.randomUUID()), LocalDateTime.now(CLOCK));
+    plan.approve(new AuthorityId(UUID.randomUUID()), approvedAt);
     return plans.save(plan);
   }
 
