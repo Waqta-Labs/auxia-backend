@@ -3,16 +3,19 @@ package com.waqtalabs.auxia.emergencymanagement.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.assertThatThrownBy;
 
-import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterCitizenReportCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterCitizenReportCommandHandler.Registration;
+import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.RegisterCitizenReportCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.StructureFieldReportCommandHandler;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.RegisterCitizenReportCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.commands.StructureFieldReportCommand;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetCitizenReportProgressQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetFieldReportSosQuery;
-import com.waqtalabs.auxia.emergencymanagement.application.queryservices.CitizenReportProgress;
+import com.waqtalabs.auxia.emergencymanagement.application.queries.GetZoneRankingQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.CitizenReportProgress.Stage;
+import com.waqtalabs.auxia.emergencymanagement.application.queryservices.CitizenReportProgress;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.CitizenReportQueryService;
+import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneQueryService;
+import com.waqtalabs.auxia.emergencymanagement.application.queryservices.ZoneRankingEntry;
 import com.waqtalabs.auxia.emergencymanagement.domain.events.FieldReportRegistered;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.CitizenReportNotFoundException;
 import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.FieldReportWithoutSosException;
@@ -41,6 +44,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.SosCate
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.UrgencyScore;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.VulnerablePeople;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.shared.application.exceptions.RateLimitExceededException;
 import com.waqtalabs.auxia.shared.domain.events.DomainEvent;
 import java.time.Clock;
@@ -56,6 +60,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.UUID;
+import java.util.stream.Collectors;
 import org.junit.jupiter.api.Test;
 
 class CitizenReportUseCasesTests {
@@ -91,6 +96,8 @@ class CitizenReportUseCasesTests {
           },
           CLOCK,
           events::add);
+  private final ZoneQueryService zoneQueries =
+      new ZoneQueryService(emergencies, zones, fieldReports, citizenReports);
   private final CitizenReportQueryService queries =
       new CitizenReportQueryService(
           citizenReports,
@@ -339,6 +346,30 @@ class CitizenReportUseCasesTests {
   }
 
   @Test
+  void rankingCountsHowManySosOfEachZoneMarkedEachAccessCondition() {
+    Zone pedregal = zone(chosica, "Quebrada Pedregal", new Geolocation(-11.9301, -76.6905));
+    register.handle(sos(UUID.randomUUID(), nearAltoPeru()));
+    register.handle(
+        sos(
+            UUID.randomUUID(),
+            nearAltoPeru(),
+            Set.of(AccessCondition.ROAD_BLOCKED, AccessCondition.NO_DRINKING_WATER)));
+    register.handle(sos(UUID.randomUUID(), nearAltoPeru(), Set.of()));
+
+    Map<ZoneId, Map<AccessCondition, Integer>> access =
+        zoneQueries.handle(GetZoneRankingQuery.all(chosica.id())).stream()
+            .collect(
+                Collectors.toMap(
+                    entry -> entry.zone().id(), ZoneRankingEntry::accessConditions));
+
+    assertThat(access.get(altoPeru.id()))
+        .containsExactly(
+            Map.entry(AccessCondition.ROAD_BLOCKED, 2),
+            Map.entry(AccessCondition.NO_DRINKING_WATER, 1));
+    assertThat(access.get(pedregal.id())).isEmpty();
+  }
+
+  @Test
   void structuredSosIsCompletedWithWhatTheCitizenMarked() {
     var command =
         new RegisterCitizenReportCommand(
@@ -417,6 +448,20 @@ class CitizenReportUseCasesTests {
 
   private static RegisterCitizenReportCommand sos(UUID id, Geolocation location) {
     return sos(id, location, CLOCK.instant());
+  }
+
+  private static RegisterCitizenReportCommand sos(
+      UUID id, Geolocation location, Set<AccessCondition> accessConditions) {
+    return new RegisterCitizenReportCommand(
+        new CitizenReportId(id),
+        SosCategory.RESCUE,
+        "SOS Rescate.",
+        CLOCK.instant(),
+        Optional.of(location),
+        VulnerablePeople.NONE,
+        accessConditions,
+        Optional.empty(),
+        "190.12.4.7");
   }
 
   private static RegisterCitizenReportCommand sos(
