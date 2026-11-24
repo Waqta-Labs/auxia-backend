@@ -3,6 +3,7 @@ package com.waqtalabs.auxia.shared.interfaces.rest;
 import com.waqtalabs.auxia.shared.application.exceptions.ActionNotAllowedException;
 import com.waqtalabs.auxia.shared.application.exceptions.AuthenticationFailedException;
 import com.waqtalabs.auxia.shared.application.exceptions.ExternalServiceUnavailableException;
+import com.waqtalabs.auxia.shared.application.exceptions.RateLimitExceededException;
 import com.waqtalabs.auxia.shared.domain.exceptions.ConflictException;
 import com.waqtalabs.auxia.shared.domain.exceptions.DomainException;
 import com.waqtalabs.auxia.shared.domain.exceptions.NotFoundException;
@@ -130,6 +131,22 @@ public class GlobalExceptionHandler extends ResponseEntityExceptionHandler {
             .build()
             .updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
     return handleExceptionInternal(ex, body, new HttpHeaders(), status, request);
+  }
+
+  /** Too many requests of one sender: 429, with the seconds to wait in Retry-After. */
+  @ExceptionHandler(RateLimitExceededException.class)
+  public ResponseEntity<Object> handleRateLimitExceeded(
+      RateLimitExceededException ex, WebRequest request) {
+    HttpStatus status = HttpStatus.TOO_MANY_REQUESTS;
+    long seconds = Math.max(1, ex.retryAfter().plusMillis(999).toSeconds());
+    ProblemDetail body =
+        ErrorResponse.builder(ex, status, ex.getMessage())
+            .detailMessageArguments(seconds)
+            .build()
+            .updateAndGetBody(getMessageSource(), LocaleContextHolder.getLocale());
+    HttpHeaders headers = new HttpHeaders();
+    headers.set(HttpHeaders.RETRY_AFTER, Long.toString(seconds));
+    return handleExceptionInternal(ex, body, headers, status, request);
   }
 
   /** Any exception without a specific handler: a 500 that does not expose internal details. */

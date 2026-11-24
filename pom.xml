@@ -10,7 +10,7 @@
     </parent>
     <groupId>com.waqtalabs</groupId>
     <artifactId>auxia-backend</artifactId>
-    <version>0.1.1</version>
+    <version>0.2.0</version>
     <name>auxia-backend</name>
     <description>AuxIA Backend API: modular monolith for humanitarian aid management</description>
     <properties>
@@ -48,6 +48,10 @@
         <dependency>
             <groupId>org.flywaydb</groupId>
             <artifactId>flyway-database-postgresql</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-mail</artifactId>
         </dependency>
         <dependency>
             <groupId>org.springframework.boot</groupId>
@@ -209,11 +213,15 @@
                     <systemPropertyVariables>
                         <!-- Tests never reach Neon: without Testcontainers, the connection fails. -->
                         <DB_URL>jdbc:postgresql://localhost:1/tests-use-testcontainers</DB_URL>
+                        <!-- Nor SINPAD: the tests that send reports reach the simulator by its port. -->
+                        <SINPAD_URL>http://localhost:1/tests-use-the-simulator-port</SINPAD_URL>
                         <!-- Nor the AI Service: tests replace its gateways or stub its responses. -->
                         <AI_SERVICE_URL>http://localhost:1/tests-use-stubs</AI_SERVICE_URL>
                         <AI_SERVICE_API_KEY>test-api-key-0123456789</AI_SERVICE_API_KEY>
                         <AUTH_JWT_SECRET>YXV4aWEtdGVzdC1qd3Qtc2VjcmV0LTAxMjM0NTY3ODk=</AUTH_JWT_SECRET>
                         <PLATFORM_ADMIN_KEY>test-platform-key-0123456789</PLATFORM_ADMIN_KEY>
+                        <!-- Nor an SMTP server: e-mails are only logged, even with MAIL_* in .env. -->
+                        <MAIL_ENABLED>false</MAIL_ENABLED>
                         <!-- Nor a blockchain: tests replace the ledger. The key is the first
                              public test account of Hardhat, which holds nothing real. -->
                         <BLOCKCHAIN_RPC_URL>http://localhost:1/tests-use-a-fake-ledger</BLOCKCHAIN_RPC_URL>

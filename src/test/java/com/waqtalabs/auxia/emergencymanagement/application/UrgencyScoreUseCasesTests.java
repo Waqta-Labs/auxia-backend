@@ -80,12 +80,14 @@ class UrgencyScoreUseCasesTests {
   private final AssignFieldReportZoneCommandHandler assignZone =
       new AssignFieldReportZoneCommandHandler(reports, zones, events::add);
   private final StructureFieldReportCommandHandler structure =
-      new StructureFieldReportCommandHandler(reports, aiService, events::add);
+      new StructureFieldReportCommandHandler(
+          reports, new InMemoryCitizenReportRepository(), aiService, events::add);
   private final UpdateZonePopulationImpactCommandHandler updateImpact =
       new UpdateZonePopulationImpactCommandHandler(zones, events::add);
   private final CalculateUrgencyScoreCommandHandler calculateScore =
       new CalculateUrgencyScoreCommandHandler(zones, reports, aiService, events::add);
-  private final ZoneQueryService zoneQueries = new ZoneQueryService(emergencies, zones, reports);
+  private final ZoneQueryService zoneQueries =
+      new ZoneQueryService(emergencies, zones, reports, new InMemoryCitizenReportRepository());
   private final FieldReportQueryService reportQueries =
       new FieldReportQueryService(emergencies, zones, reports);
 

@@ -10,4 +10,8 @@ interface SpringDataBrigadeRepository extends JpaRepository<BrigadeJpaEntity, UU
   List<BrigadeJpaEntity> findByOrganizationIdOrderByNameAsc(UUID organizationId);
 
   Optional<BrigadeJpaEntity> findByAssignmentsDistributionPlanId(UUID distributionPlanId);
+
+  Optional<BrigadeJpaEntity> findByMembersUserId(UUID userId);
+
+  Optional<BrigadeJpaEntity> findByCode(String code);
 }

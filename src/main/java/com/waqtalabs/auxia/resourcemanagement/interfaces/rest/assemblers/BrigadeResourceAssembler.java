@@ -6,6 +6,7 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Brigade;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.StaffMember;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.BrigadeId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Location;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.UserId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.AddStaffMemberRequest;
 import com.waqtalabs.auxia.resourcemanagement.interfaces.rest.resources.BrigadeAssignmentResource;
@@ -26,7 +27,8 @@ public final class BrigadeResourceAssembler {
     return new CreateBrigadeCommand(
         organizationId,
         request.name(),
-        new Location(base.latitude(), base.longitude()));
+        new Location(base.latitude(), base.longitude()),
+        request.code());
   }
 
   public static AddStaffMemberCommand toCommand(
@@ -36,7 +38,8 @@ public final class BrigadeResourceAssembler {
         organizationId,
         request.fullName(),
         request.role(),
-        request.phone());
+        request.phone(),
+        request.userId() == null ? null : new UserId(request.userId()));
   }
 
   public static BrigadeResource toResource(Brigade brigade) {
@@ -45,6 +48,7 @@ public final class BrigadeResourceAssembler {
         brigade.id().value(),
         brigade.organizationId().value(),
         brigade.name(),
+        brigade.code(),
         new LocationResource(base.latitude(), base.longitude()),
         brigade.status(),
         brigade.hasLeader(),
@@ -56,7 +60,8 @@ public final class BrigadeResourceAssembler {
                         member.id().value(),
                         member.fullName(),
                         member.role(),
-                        member.phone().orElse(null)))
+                        member.phone().orElse(null),
+                        member.userId().map(UserId::value).orElse(null)))
             .toList(),
         brigade
             .currentAssignment()

@@ -14,7 +14,9 @@ import com.waqtalabs.auxia.resourcemanagement.application.commands.RemoveStaffMe
 import com.waqtalabs.auxia.resourcemanagement.application.queries.GetBrigadeByIdQuery;
 import com.waqtalabs.auxia.resourcemanagement.application.queries.GetBrigadesByOrganizationIdQuery;
 import com.waqtalabs.auxia.resourcemanagement.application.queryservices.BrigadeQueryService;
+import com.waqtalabs.auxia.resourcemanagement.domain.exceptions.AccountInAnotherBrigadeException;
 import com.waqtalabs.auxia.resourcemanagement.domain.exceptions.BrigadeNotFoundException;
+import com.waqtalabs.auxia.resourcemanagement.domain.exceptions.BrigadistAccountRequiredException;
 import com.waqtalabs.auxia.resourcemanagement.domain.exceptions.DuplicateBrigadeException;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Brigade;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.StaffMember;
@@ -23,6 +25,9 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.BrigadeS
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Location;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.StaffRole;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.UserId;
+import java.util.HashSet;
+import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
@@ -32,8 +37,10 @@ class BrigadeUseCasesTests {
 
   private final InMemoryBrigadeRepository brigades = new InMemoryBrigadeRepository();
   private final CreateBrigadeCommandHandler create = new CreateBrigadeCommandHandler(brigades);
+  private final Set<UserId> brigadists = new HashSet<>();
   private final AddStaffMemberCommandHandler addMember =
-      new AddStaffMemberCommandHandler(brigades);
+      new AddStaffMemberCommandHandler(
+          brigades, (user, organizationId) -> brigadists.contains(user));
   private final RemoveStaffMemberCommandHandler removeMember =
       new RemoveStaffMemberCommandHandler(brigades);
   private final ChangeBrigadeAvailabilityCommandHandler changeAvailability =
@@ -59,6 +66,24 @@ class BrigadeUseCasesTests {
   }
 
   @Test
+  void brigadeCodeIsGeneratedOrGivenAndUniqueInThePlatform() {
+    Brigade generated = create();
+    Brigade given =
+        create.handle(
+            new CreateBrigadeCommand(organization, "Brigada Alfa", CHOSICA, " brg-alfa-07 "));
+    var otherOrganization = new OrganizationId(UUID.randomUUID());
+
+    assertThat(generated.code()).matches("BRG-[0-9A-F]{8}");
+    assertThat(given.code()).isEqualTo("BRG-ALFA-07");
+    assertThat(brigades.findByCode("BRG-ALFA-07")).contains(given);
+    assertThatThrownBy(
+            () ->
+                create.handle(
+                    new CreateBrigadeCommand(otherOrganization, "Alfa", CHOSICA, "BRG-ALFA-07")))
+        .isInstanceOf(DuplicateBrigadeException.class);
+  }
+
+  @Test
   void membersAreAddedAndRemoved() {
     Brigade brigade = create();
 
@@ -73,6 +98,41 @@ class BrigadeUseCasesTests {
         removeMember.handle(
             new RemoveStaffMemberCommand(brigade.id(), organization, leader.id()));
     assertThat(withoutMember.members()).isEmpty();
+  }
+
+  @Test
+  void memberWithTheAccountOfABrigadistOfTheOrganizationIsLinkedToIt() {
+    Brigade brigade = create();
+    UserId account = new UserId(UUID.randomUUID());
+    brigadists.add(account);
+
+    addMember.handle(member(brigade, account));
+
+    Brigade stored = brigades.findById(brigade.id()).orElseThrow();
+    assertThat(brigades.findByMemberAccount(account)).contains(stored);
+    assertThat(stored.members().getFirst().userId()).contains(account);
+  }
+
+  @Test
+  void accountMustBeAnActiveBrigadistOfTheOrganizationInNoOtherBrigade() {
+    Brigade first = create();
+    Brigade second =
+        create.handle(new CreateBrigadeCommand(organization, "Brigada Chosica 2", CHOSICA));
+    UserId notABrigadist = new UserId(UUID.randomUUID());
+    UserId brigadist = new UserId(UUID.randomUUID());
+    brigadists.add(brigadist);
+    addMember.handle(member(first, brigadist));
+
+    assertThatThrownBy(() -> addMember.handle(member(second, notABrigadist)))
+        .isInstanceOf(BrigadistAccountRequiredException.class);
+    assertThatThrownBy(() -> addMember.handle(member(second, brigadist)))
+        .isInstanceOf(AccountInAnotherBrigadeException.class);
+    assertThat(brigades.findById(second.id()).get().members()).isEmpty();
+  }
+
+  private AddStaffMemberCommand member(Brigade brigade, UserId account) {
+    return new AddStaffMemberCommand(
+        brigade.id(), organization, "Rosa Quispe", StaffRole.LEADER, null, account);
   }
 
   @Test

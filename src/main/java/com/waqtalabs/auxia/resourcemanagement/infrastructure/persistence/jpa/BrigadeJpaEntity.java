@@ -32,6 +32,8 @@ class BrigadeJpaEntity {
 
   String name;
 
+  String code;
+
   @Column(name = "base_latitude")
   double baseLatitude;
 

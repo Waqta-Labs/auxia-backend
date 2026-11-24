@@ -116,14 +116,27 @@ blockchain are configured with environment variables:
 | `DB_PASSWORD` | Database password |
 | `AI_SERVICE_URL` | URL of [auxia-ai-service](https://github.com/Waqta-Labs/auxia-ai-service). Default `http://localhost:8765` |
 | `AI_SERVICE_API_KEY` | Shared secret sent in `X-API-Key`. It must be the same `AI_SERVICE_API_KEY` of the AI Service. Required |
+| `SINPAD_URL` | URL of SINPAD, without `/api/v1`. Default the SINPAD simulator of this backend, `http://localhost:<port>/sinpad-simulator` |
+| `SINPAD_API_KEY` | Key of AuxIA in SINPAD, sent in `X-Api-Key`; the simulator expects the same one. Set a random value outside local development |
+| `SINPAD_SIMULATOR_ENABLED` | `false` turns off the simulator when `SINPAD_URL` points to a real service. Default `true` |
 | `AUTH_JWT_SECRET` | Base64 key that signs the access tokens, at least 32 bytes, e.g. `openssl rand -base64 32`. Required |
 | `PLATFORM_ADMIN_KEY` | Secret of the platform operator, sent in `X-Platform-Key` to register and suspend organizations. Required |
+| `MAIL_HOST` | SMTP server of the e-mail notifications, e.g. `smtp.gmail.com`. Without it, the e-mails are only logged |
+| `MAIL_PORT` | SMTP port with STARTTLS. Default `587` |
+| `MAIL_USERNAME` / `MAIL_PASSWORD` | SMTP account. With Gmail, the address and an app password (Google account → Security → App passwords) |
+| `MAIL_FROM` | Sender address. Default `MAIL_USERNAME`; Gmail always sends as the signed-in account |
+| `MAIL_ENABLED` | `false` only logs the e-mails, even with a server. Default `true`; the tests set `false` |
 | `AZURE_STORAGE_CONNECTION_STRING` | Connection string of the Azure Storage account of the evidence files (portal: Storage account → Access keys). Locally, the one of Azurite (below). Required |
 | `AZURE_STORAGE_CONTAINER` | Private container of the evidence files; created if it does not exist. Default `evidences` |
 | `BLOCKCHAIN_RPC_URL` | JSON-RPC URL of the network, e.g. the Sepolia URL of Alchemy. Required |
 | `BLOCKCHAIN_PRIVATE_KEY` | Private key of the wallet that owns `DeliveryRegistry`: only it can register deliveries. It pays the gas of each anchoring (SepoliaETH). Required |
 | `BLOCKCHAIN_CONTRACT_ADDRESS` | Address of `DeliveryRegistry`. Default the Sepolia deployment, `0xe678347E182cbf00031401C97284AaB1C6b8148c` |
 | `BLOCKCHAIN_CHAIN_ID` | Network of the transactions. Default `11155111` (Sepolia) |
+| `SOS_RATE_LIMIT_MAX_REPORTS` / `SOS_RATE_LIMIT_WINDOW` | New SOS and SOS files that one address can send in a period. Default `10` every `10m` |
+| `SOS_RELAY_RATE_LIMIT_MAX_REPORTS` / `SOS_RELAY_RATE_LIMIT_WINDOW` | New SOS relayed by Mesh that one address can upload in a period, apart from the limit above. Default `60` every `10m` |
+| `SOS_ATTACHMENTS_CONTAINER` | Private container of the photos and audios of the SOS, in the storage account of the evidence. Default `sos-attachments` |
+| `BRIGADE_ID_CARDS_CONTAINER` | Private container of the photos of the cards of the brigadists that register (A_02). Default `brigade-id-cards` |
+| `CORS_ALLOWED_ORIGINS` | Origins of the web application that may call the API from the browser, separated by commas. Default `http://localhost:5173,http://localhost:3000` (Vite and Next.js dev servers) |
 
 For local development, copy `.env.example` to `.env` and fill in the values.
 The application imports `.env` from the working directory when it exists.
@@ -162,6 +175,10 @@ application starts.
 | V7 | `field_reports`: the indicators corrected by an authority, next to those of the NLP, with who, when and why (US-03). `zones`: the manual priority with who, when and why (US-07). |
 | V8 | `stock_alerts`: low stock alerts, one open at most per resource (US-10). |
 | V9 | `zones.responsible_authority_id`; `zone_decisions`, the history of decisions of each zone, with the decisions the data already kept (US-20); `shift_handovers` and their zones (US-23). |
+| V10 | `citizen_reports`: the SOS of citizens from the mobile app, identified by the id the phone generates, with the field report each one became. |
+| V11 | `citizen_report_attachments`: the photo and the audio of each SOS (A_04), at most one of each. |
+| V12 | `staff_members.user_id`: the `FIELD_BRIGADE` account of a member, in one brigade at most (A_07). |
+| V13 | `brigades.code`, unique, generated for the existing brigades; `brigade_registrations`, the requests of brigadists from the app (A_02). |
 
 Neon already had the schema of V1 when Flyway was added, so on Neon V1 is
 recorded as the baseline (`baseline-on-migrate`) and only V2 onwards run. An
@@ -253,6 +270,7 @@ any signed-in user; changes need a role (see [Roles](#roles)).
 | `GET /api/v1/emergencies/{id}` | One emergency. |
 | `PATCH /api/v1/emergencies/{id}/close` | Close an emergency. It no longer accepts zones. |
 | `GET /api/v1/emergencies/{id}/sinpad-export` | CSV of the field reports for SINPAD (US-33); 422 lists the reports with required fields missing. |
+| `POST /api/v1/emergencies/{id}/sinpad-submissions` | Sends the same reports to SINPAD by HTTP and returns its registration number (US-33). AUTHORITY only. |
 | `POST /api/v1/emergencies/{emergencyId}/zones` | Register a zone of an active emergency. The authority who registers it is its responsible. |
 | `GET /api/v1/emergencies/{emergencyId}/zones` | Urgency ranking of the zones (US-06). Filters: `minScore`, `maxScore`, `need`. |
 | `GET /api/v1/zones/{id}` | One zone, with its score and priority level. |
@@ -289,6 +307,19 @@ opens it well. The zone, the damage level, the people and the families affected
 are required: if a report lacks one, nothing is exported and the 422 lists
 `incompleteReports`, each with its `fieldReportId` and `missingFields`. An
 emergency without reports answers 404.
+
+The same reports, with the same checks, can be sent to SINPAD instead of
+uploading the file. INDECI has no public API for SINPAD, so the integration is
+validated against a **SINPAD simulator** that runs in this backend under
+`/sinpad-simulator` (Swagger tag *SINPAD simulator*) and that Emergency
+Management reaches only by HTTP, through `SINPAD_URL`, like any external
+system. The simulator takes the fields in Spanish, checks the required ones and
+the key in `X-Api-Key`, and answers a registration number such as
+`SINPAD-2026-000001`; sending the emergency again replaces its reports and keeps
+the number. It keeps the registrations in memory, so they are lost when the
+backend restarts. Pointing `SINPAD_URL` to a real service and setting
+`SINPAD_SIMULATOR_ENABLED=false` needs no change in the code. If SINPAD does not
+answer, the API answers 503.
 
 Every decision of an authority on a zone is added to its history in the same
 transaction (US-20): the registration of the zone, the modification, approval or
@@ -374,7 +405,8 @@ otherwise).
 - Every change of stock (a new resource, a restock, an adjustment, a
   reservation and its change, release or consumption) evaluates the alerts
   after its commit: a resource whose available quantity falls below its minimum
-  stock gets an `OPEN` alert, written to the log, and the alert is `RESOLVED`
+  stock gets an `OPEN` alert, e-mailed to the administrators (see
+  [Notifications](#notifications)), and the alert is `RESOLVED`
   when the resource is restocked above the minimum. A new fall raises a new
   alert.
 - The organization is the one of the signed-in user. An inventory of another
@@ -391,21 +423,34 @@ otherwise).
 
 | Method and path | Description |
 |---|---|
-| `POST /api/v1/brigades` | Create a brigade of the organization of the user, with its base location. It starts `AVAILABLE`. |
+| `POST /api/v1/brigades` | Create a brigade of the organization of the user, with its base location and optionally its `code`. It starts `AVAILABLE`. |
 | `GET /api/v1/brigades?status=` | Brigades of the organization of the user by name, optionally by status. |
 | `GET /api/v1/brigades/{id}` | One brigade with its members and its assignment in progress. |
-| `POST /api/v1/brigades/{id}/members` | Add a member (`LEADER`, `DRIVER`, `MEDIC` or `VOLUNTEER`). |
+| `POST /api/v1/brigades/{id}/members` | Add a member (`LEADER`, `DRIVER`, `MEDIC` or `VOLUNTEER`), optionally with the `userId` of its `FIELD_BRIGADE` account. |
 | `DELETE /api/v1/brigades/{id}/members/{memberId}` | Remove a member. |
 | `PATCH /api/v1/brigades/{id}/availability` | Put the brigade `AVAILABLE` or `OFF_DUTY`. |
+| `GET /api/v1/me/missions` | Missions of the brigade of the signed-in `FIELD_BRIGADE` (A_07). |
 
 - Brigade names are unique per organization (409). A brigade of another
-  organization answers 404.
+  organization answers 404. Its `code` (such as `BRG-ALFA-07`), which a
+  brigadist writes to register, is unique in the platform (409) and generated
+  when it is not given.
 - A brigade is assigned to a distribution plan only while it is available and
   has a `LEADER`, and has one assignment in progress at most. It becomes
   `ASSIGNED` when a plan is approved and `AVAILABLE` again when the delivery of
   the plan is registered.
 - While a brigade is assigned, its availability cannot change (409) and its last
   leader cannot be removed (422). `ASSIGNED` is never set by hand (422).
+- A member with a `userId` is the account that signs in to the mobile app. It
+  must be an active `FIELD_BRIGADE` of the organization (422) and is a member of
+  one brigade at most (409).
+- `GET /api/v1/me/missions` lists the assignments of the brigade of that
+  account: the one in progress first (`ASSIGNED`), then the completed ones.
+  Each mission carries its delivery to register, the zone with its score, the
+  reasons of the score, the vulnerable people and its coordinates, the distance
+  and travel time from the base of the brigade at 30 km/h, and the resources
+  with their names. `category` is `MEDICAL` when the plan carries medicine,
+  else `SUPPLIES`. An account outside every brigade gets an empty list.
 
 ### Deliveries (Traceability)
 
@@ -485,6 +530,60 @@ otherwise).
   `DistributionPlanApproved`) and of Traceability (`DeliveryInitiated`,
   `DeliveryConfirmed`, `DeliveryCertified`) after their commit.
 
+### Citizen SOS (Emergency Management)
+
+The mobile app sends the SOS of citizens without signing in, and keeps each one
+in a queue until the API confirms it.
+
+| Method and path | Description |
+|---|---|
+| `POST /api/v1/public/field-reports` | Send an SOS (JSON). `201` the first time, `200` when its `clientReportId` was already stored. |
+| `GET /api/v1/public/field-reports/{clientReportId}` | Progress of an SOS: `status`, `score` and `etaMinutes`. `404` when it does not exist. |
+| `PUT /api/v1/public/field-reports/{clientReportId}/attachments/{attachmentId}` | Photo or audio of the SOS (multipart, part `file`). `201` the first time, `200` when it was already stored. |
+| `GET /api/v1/field-reports/{id}/attachments` | Photo and audio of the SOS behind a field report, with sign-in. |
+| `GET /api/v1/field-reports/{id}/attachments/{attachmentId}` | Download one of them, with sign-in. |
+| `GET /api/v1/field-reports/{id}/sos` | What the citizen marked in the SOS besides the text: category, location, vulnerable people and access conditions, with sign-in. `404` when the report does not come from an SOS. |
+
+- The phone generates `clientReportId` (a UUID), so a retry never stores the
+  SOS twice. `source` is always `CITIZEN`, whatever the request says.
+- The SOS becomes a field report of source `CITIZEN`, pending review like any
+  other, and the NLP structures it. What the citizen marked completes the
+  indicators of the text: the children and elderly people, the injured among the
+  people affected, medicine for the injured or a medical SOS, and water when
+  there is no drinking water. A number in the text above the marked one is
+  kept. It goes to the active emergency and the zone
+  nearest to its `location`, up to 5 km away; up to 50 km it goes to the
+  emergency of that zone, pending zone assignment. Without `location`, or
+  farther, it goes to the only active emergency if there is just one. Otherwise
+  it is kept without a field report, so it is never lost.
+- A phone that received an SOS from another one by Mesh (A_05, A_06) uploads it
+  with `"relay": { "hops": 1 to 3 }`. It is registered like any other, and its
+  `reportedAt` is still the time of the phone that sent it, hours before if
+  needed. As one phone uploads the SOS of many neighbors, the new relayed SOS
+  count in a wider limit of their own.
+- An SOS with `relatedReportId` adds detail to an earlier one and goes to the
+  same emergency and zone.
+- `status` is `RECEIVED` while the SOS has no zone or its zone has no score,
+  `PRIORITIZED` once the zone has a score or a manual priority, and
+  `BRIGADE_ON_THE_WAY` while a brigade is delivering an approved plan of the
+  zone; once the delivery is confirmed it is `PRIORITIZED` again. As
+  "Mis reportes" shows it (A_05), `score` is the Urgency Score of the zone once
+  the SOS is prioritized, and `etaMinutes` the travel of the brigade from its
+  base, in a straight line at 30 km/h, while it is on the way.
+- The SOS carries one photo (JPEG, PNG, WEBP or HEIC, up to 10 MB) and one
+  audio (M4A, AAC, MP3, OGG or WAV, up to 5 MB), as A_04 asks. The phone
+  generates the id of each file, so a retry returns the stored one. A second
+  file of the same kind, another type or a larger size answers `422`; a file of
+  an SOS that has not arrived, `404`. The files stay in a private container:
+  only a signed-in user downloads them, never the public API nor the
+  blockchain (TS-C02).
+- Each address can send 10 new SOS every 10 minutes, generous because in a
+  disaster many people share one (the NAT of a mobile operator, the Wi-Fi of a
+  shelter). Over the limit the answer is `429` with `Retry-After`; a retry of a
+  stored SOS does not count. The address is the last one of `X-Forwarded-For`,
+  which Azure App Service appends.
+- Never cached, unlike the public view.
+
 ### Identity Access
 
 | Method and path | Description |
@@ -498,6 +597,13 @@ otherwise).
 | `GET /api/v1/users/me` | The account of the signed-in user. |
 | `PATCH /api/v1/users/{id}/role` | Change the role of a user (US-22). |
 | `PATCH /api/v1/users/{id}/status` | `ACTIVE` to enable or unlock an account, `DISABLED` to disable it. |
+| `PUT /api/v1/public/brigade-registrations/{id}` | Request of a brigadist from the app (A_02), without sign-in: part `registration` (JSON) and optional part `idCard`. |
+| `GET /api/v1/public/brigade-registrations/{id}` | Status of the request, with its secret in `X-Device-Secret`. |
+| `POST /api/v1/auth/device-sign-in` | Sign in an approved brigadist with `registrationId` and `deviceSecret`. |
+| `GET /api/v1/brigade-registrations?status=` | Requests of the organization (`PENDING` by default), for its administrator. |
+| `GET /api/v1/brigade-registrations/{id}/id-card` | Photo of the card of a request. |
+| `POST /api/v1/brigade-registrations/{id}/approval` | Approve a request: creates the account and adds the brigadist to the brigade. |
+| `POST /api/v1/brigade-registrations/{id}/rejection` | Reject a request with a `reason` that the brigadist sees. |
 
 - Wrong email, wrong password, a locked account and a suspended organization
   get the same 401 "Invalid credentials.", so the answer does not reveal what
@@ -512,6 +618,21 @@ otherwise).
   organizations with `PLATFORM_ADMIN_KEY`.
 - Other bounded contexts use `IdentityAccessContextFacade` to check the current
   role of a user before a critical command.
+- A brigadist registers from the app (A_02) with their name, phone,
+  organization, the `code` of their brigade and optionally the photo of their
+  card (JPEG, PNG, WEBP or HEIC, up to 10 MB). A_02 asks for no e-mail nor
+  password: the phone generates the `registrationId` and a `deviceSecret` (32 to
+  64 characters), which is stored as a hash. Sending them again returns the
+  stored request (200); the same id with another secret answers 409, and an
+  unknown code 404.
+- An `ORGANIZATION_ADMIN` of the organization of that brigade approves or
+  rejects it once (409 after). Approving it creates a `FIELD_BRIGADE` account,
+  whose credential is the secret and whose e-mail ends in `.invalid` so it
+  never receives mail, and adds the brigadist to the brigade as a `VOLUNTEER`
+  linked to it, so the app shows its missions. The app asks for the status
+  with the secret and, once approved, signs in with
+  `POST /api/v1/auth/device-sign-in`: the same token, 401 and lock of
+  `sign-in`.
 
 ### Roles
 
@@ -557,6 +678,18 @@ decides what to send and when (TS-C04).
   `GET /zones/{id}/report` includes them, in the language of `Accept-Language`
   (OpenPDF).
 
+## Notifications
+
+The Notification Service sends plain text e-mails, in Spanish, one per
+recipient. Sending runs apart from the request, and a failure is only logged:
+a notification never undoes the action that triggered it.
+
+| Event | Recipients |
+|---|---|
+| A resource falls below its minimum stock (US-10) | Administrators of the organization |
+| A distribution plan is approved | The authority who approved it and the administrators |
+| A delivery is certified on the blockchain | Authorities of the organization, with the link to the transaction |
+
 ## API conventions
 
 - **Language.** The API answers in English (`en_US`) by default and in Latin
@@ -588,3 +721,8 @@ decides what to send and when (TS-C04).
   that cannot run the action answers 403, both as localized problem details.
   In Swagger UI, sign in with `POST /api/v1/auth/sign-in` and paste the token
   in **Authorize**.
+- **CORS.** Browsers may call `/api/**` only from the origins in
+  `CORS_ALLOWED_ORIGINS`; a preflight from any other origin answers 403. The
+  web app sends `Authorization`, `Content-Type` and `Accept-Language`, and can
+  read `Content-Disposition` and `Location`. The field app is not a browser and
+  is not affected.

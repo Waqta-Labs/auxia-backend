@@ -11,6 +11,7 @@ import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.HashSet;
+import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
@@ -24,7 +25,8 @@ import org.springframework.transaction.annotation.Transactional;
  * receives and returns UUIDs and role names only, so no other context depends on its domain.
  *
  * <p>Emergency Management checks the AUTHORITY role before approving or rejecting a plan, and
- * Traceability checks FIELD_BRIGADE or AUTHORITY before registering a delivery.
+ * Traceability checks FIELD_BRIGADE or AUTHORITY before registering a delivery. The notifications
+ * of every context ask here for the e-mails of their recipients.
  */
 @Service
 public class IdentityAccessContextFacade {
@@ -71,5 +73,29 @@ public class IdentityAccessContextFacade {
           .ifPresent(user -> names.put(userId, user.name().fullName()));
     }
     return names;
+  }
+
+  /**
+   * E-mails of the active users of the organization with any of the roles, to notify them.
+   *
+   * @param roles names of roles, such as {@code ORGANIZATION_ADMIN}; an unknown name never matches
+   */
+  @Transactional(readOnly = true)
+  public List<String> getActiveUserEmails(UUID organizationId, String... roles) {
+    Set<String> wanted = Set.of(roles);
+    return userAccountRepository.findByOrganizationId(new OrganizationId(organizationId)).stream()
+        .filter(UserAccount::isActive)
+        .filter(user -> wanted.contains(user.role().name()))
+        .map(user -> user.email().value())
+        .toList();
+  }
+
+  /** E-mail of the user, or empty if the user does not exist or is not active. */
+  @Transactional(readOnly = true)
+  public Optional<String> getActiveUserEmail(UUID userId) {
+    return userAccountRepository
+        .findById(new UserId(userId))
+        .filter(UserAccount::isActive)
+        .map(user -> user.email().value());
   }
 }

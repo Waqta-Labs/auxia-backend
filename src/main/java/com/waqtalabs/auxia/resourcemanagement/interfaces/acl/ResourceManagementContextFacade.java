@@ -1,19 +1,26 @@
 package com.waqtalabs.auxia.resourcemanagement.interfaces.acl;
 
+import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.AddStaffMemberCommandHandler;
 import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.AssignBrigadeCommandHandler;
 import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.ChangeReservationCommandHandler;
 import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.ReleaseReservationCommandHandler;
 import com.waqtalabs.auxia.resourcemanagement.application.commandhandlers.ReserveResourcesCommandHandler;
+import com.waqtalabs.auxia.resourcemanagement.application.commands.AddStaffMemberCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.AssignBrigadeCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.ChangeReservationCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.ReleaseReservationCommand;
 import com.waqtalabs.auxia.resourcemanagement.application.commands.ReserveResourcesCommand;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.aggregates.Brigade;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.BrigadeId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.DistributionPlanId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Location;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ReservationLine;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ResourceId;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.StaffRole;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.UserId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ZoneId;
+import com.waqtalabs.auxia.resourcemanagement.domain.repositories.BrigadeRepository;
 import com.waqtalabs.auxia.resourcemanagement.domain.repositories.InventoryRepository;
 import java.util.List;
 import java.util.Optional;
@@ -24,7 +31,8 @@ import org.springframework.transaction.annotation.Transactional;
 /**
  * What Resource Management offers to the other bounded contexts, which run in the same process
  * (Shared Kernel). Emergency Management uses it to check the available stock of an organization,
- * to reserve or release the resources of a distribution plan and to assign it a brigade.
+ * to reserve or release the resources of a distribution plan, to assign it a brigade and to know
+ * whether a brigade took it.
  *
  * <p>It receives and returns UUIDs and simple records, so no other context depends on the domain
  * of Resource Management. Errors are the domain exceptions of this context: 404 when the
@@ -35,22 +43,60 @@ import org.springframework.transaction.annotation.Transactional;
 public class ResourceManagementContextFacade {
 
   private final InventoryRepository inventoryRepository;
+  private final BrigadeRepository brigadeRepository;
   private final ReserveResourcesCommandHandler reserveResources;
   private final ChangeReservationCommandHandler changeReservation;
   private final ReleaseReservationCommandHandler releaseReservation;
   private final AssignBrigadeCommandHandler assignBrigade;
+  private final AddStaffMemberCommandHandler addStaffMember;
 
   public ResourceManagementContextFacade(
       InventoryRepository inventoryRepository,
+      BrigadeRepository brigadeRepository,
       ReserveResourcesCommandHandler reserveResources,
       ChangeReservationCommandHandler changeReservation,
       ReleaseReservationCommandHandler releaseReservation,
-      AssignBrigadeCommandHandler assignBrigade) {
+      AssignBrigadeCommandHandler assignBrigade,
+      AddStaffMemberCommandHandler addStaffMember) {
     this.inventoryRepository = inventoryRepository;
+    this.brigadeRepository = brigadeRepository;
     this.reserveResources = reserveResources;
     this.changeReservation = changeReservation;
     this.releaseReservation = releaseReservation;
     this.assignBrigade = assignBrigade;
+    this.addStaffMember = addStaffMember;
+  }
+
+  /**
+   * The brigade with a code, which a brigadist writes to register (A_02), ignoring case; empty
+   * when no brigade has it.
+   */
+  @Transactional(readOnly = true)
+  public Optional<BrigadeReferenceResource> findBrigadeByCode(String code) {
+    return brigadeRepository
+        .findByCode(Brigade.normalizeCode(code))
+        .map(
+            brigade ->
+                new BrigadeReferenceResource(
+                    brigade.id().value(), brigade.organizationId().value(), brigade.name()));
+  }
+
+  /**
+   * Adds an approved brigadist to the brigade as a {@code VOLUNTEER} linked to their
+   * FIELD_BRIGADE account, so the app shows them its missions. Runs in the transaction of the
+   * approval.
+   */
+  @Transactional
+  public void addBrigadist(
+      UUID brigadeId, UUID organizationId, String fullName, String phone, UUID userId) {
+    addStaffMember.handle(
+        new AddStaffMemberCommand(
+            new BrigadeId(brigadeId),
+            new OrganizationId(organizationId),
+            fullName,
+            StaffRole.VOLUNTEER,
+            phone,
+            new UserId(userId)));
   }
 
   /** Resources of the inventory of an organization; empty when it has no inventory. */
@@ -121,6 +167,22 @@ public class ResourceManagementContextFacade {
                 Optional.ofNullable(zoneLocation)
                     .map(location -> new Location(location.latitude(), location.longitude()))))
         .map(brigade -> brigade.id().value());
+  }
+
+  /**
+   * Base of the brigade that is still delivering the plan; empty when no brigade took it or its
+   * delivery is already confirmed.
+   */
+  @Transactional(readOnly = true)
+  public Optional<BrigadeBaseResource> assignedBrigadeBase(UUID distributionPlanId) {
+    DistributionPlanId planId = new DistributionPlanId(distributionPlanId);
+    return brigadeRepository
+        .findByAssignedPlan(planId)
+        .filter(
+            brigade ->
+                brigade.currentAssignment().filter(current -> current.isFor(planId)).isPresent())
+        .map(Brigade::baseLocation)
+        .map(base -> new BrigadeBaseResource(base.latitude(), base.longitude()));
   }
 
   private static List<ReservationLine> toReservationLines(List<ReservationLineResource> lines) {

@@ -9,6 +9,7 @@ import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Distribu
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.Location;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.StaffMemberId;
+import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.UserId;
 import com.waqtalabs.auxia.resourcemanagement.domain.model.valueobjects.ZoneId;
 import java.util.Map;
 import java.util.Set;
@@ -25,13 +26,18 @@ final class BrigadeJpaMapper {
         new BrigadeId(entity.id),
         new OrganizationId(entity.organizationId),
         entity.name,
+        entity.code,
         new Location(entity.baseLatitude, entity.baseLongitude),
         entity.status,
         entity.members.stream()
             .map(
                 row ->
                     StaffMember.reconstitute(
-                        new StaffMemberId(row.id), row.fullName, row.role, row.phone))
+                        new StaffMemberId(row.id),
+                        row.fullName,
+                        row.role,
+                        row.phone,
+                        row.userId == null ? null : new UserId(row.userId)))
             .toList(),
         entity.assignments.stream()
             .map(
@@ -54,6 +60,7 @@ final class BrigadeJpaMapper {
     entity.id = brigade.id().value();
     entity.organizationId = brigade.organizationId().value();
     entity.name = brigade.name();
+    entity.code = brigade.code();
     entity.baseLatitude = brigade.baseLocation().latitude();
     entity.baseLongitude = brigade.baseLocation().longitude();
     entity.status = brigade.status();
@@ -74,6 +81,7 @@ final class BrigadeJpaMapper {
       row.fullName = member.fullName();
       row.role = member.role();
       row.phone = member.phone().orElse(null);
+      row.userId = member.userId().map(UserId::value).orElse(null);
     }
 
     Map<UUID, BrigadeAssignmentJpaEntity> assignments =

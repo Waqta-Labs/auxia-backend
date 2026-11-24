@@ -9,6 +9,7 @@ import com.waqtalabs.auxia.emergencymanagement.domain.exceptions.NoFieldReportsT
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Emergency;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.FieldReport;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.Zone;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.StructuredFieldData;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
 import com.waqtalabs.auxia.emergencymanagement.domain.repositories.EmergencyRepository;
@@ -50,15 +51,28 @@ public class SinpadExportQueryService {
   }
 
   /**
+   * The export as a file.
+   *
    * @throws EmergencyNotFoundException if the emergency does not exist
    * @throws NoFieldReportsToExportException if the emergency has no field reports
    * @throws IncompleteSinpadReportsException if a report lacks a field SINPAD requires
    */
   public byte[] handle(GetSinpadExportQuery query) {
+    return writer.write(export(query.emergencyId()));
+  }
+
+  /**
+   * The rows of the export, which the file and the submission to SINPAD share.
+   *
+   * @throws EmergencyNotFoundException if the emergency does not exist
+   * @throws NoFieldReportsToExportException if the emergency has no field reports
+   * @throws IncompleteSinpadReportsException if a report lacks a field SINPAD requires
+   */
+  public SinpadExport export(EmergencyId emergencyId) {
     Emergency emergency =
         emergencyRepository
-            .findById(query.emergencyId())
-            .orElseThrow(() -> new EmergencyNotFoundException(query.emergencyId()));
+            .findById(emergencyId)
+            .orElseThrow(() -> new EmergencyNotFoundException(emergencyId));
     List<FieldReport> reports =
         fieldReportRepository.findByEmergencyId(emergency.id()).stream()
             .sorted(Comparator.comparing(FieldReport::reportedAt))
@@ -86,7 +100,7 @@ public class SinpadExportQueryService {
                         zoneNames.get(report.zoneId().orElseThrow()),
                         report.structuredData().orElseThrow()))
             .toList();
-    return writer.write(new SinpadExport(emergency, rows));
+    return new SinpadExport(emergency, rows);
   }
 
   /** A report not structured yet lacks every indicator. */

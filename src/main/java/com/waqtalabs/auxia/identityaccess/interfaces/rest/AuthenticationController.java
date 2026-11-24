@@ -1,9 +1,12 @@
 package com.waqtalabs.auxia.identityaccess.interfaces.rest;
 
+import com.waqtalabs.auxia.identityaccess.application.commandhandlers.DeviceSignInCommandHandler;
 import com.waqtalabs.auxia.identityaccess.application.commandhandlers.SignInCommandHandler;
 import com.waqtalabs.auxia.identityaccess.application.commands.SignInCommand;
+import com.waqtalabs.auxia.identityaccess.domain.model.valueobjects.BrigadeRegistrationId;
 import com.waqtalabs.auxia.identityaccess.interfaces.rest.assemblers.IdentityResourceAssembler;
 import com.waqtalabs.auxia.identityaccess.interfaces.rest.resources.AuthenticatedUserResource;
+import com.waqtalabs.auxia.identityaccess.interfaces.rest.resources.BrigadeRegistrationResource.DeviceSignIn;
 import com.waqtalabs.auxia.identityaccess.interfaces.rest.resources.SignInRequest;
 import io.swagger.v3.oas.annotations.Operation;
 import io.swagger.v3.oas.annotations.responses.ApiResponse;
@@ -21,9 +24,12 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthenticationController {
 
   private final SignInCommandHandler signIn;
+  private final DeviceSignInCommandHandler deviceSignIn;
 
-  public AuthenticationController(SignInCommandHandler signIn) {
+  public AuthenticationController(
+      SignInCommandHandler signIn, DeviceSignInCommandHandler deviceSignIn) {
     this.signIn = signIn;
+    this.deviceSignIn = deviceSignIn;
   }
 
   @PostMapping("/sign-in")
@@ -40,5 +46,20 @@ public class AuthenticationController {
   public AuthenticatedUserResource signIn(@Valid @RequestBody SignInRequest request) {
     return IdentityResourceAssembler.toResource(
         signIn.handle(new SignInCommand(request.email(), request.password())));
+  }
+
+  @PostMapping("/device-sign-in")
+  @SecurityRequirements
+  @Operation(
+      summary = "Sign in a brigadist with the secret of their phone",
+      description =
+          "For a brigadist whose request (A_02) was approved: registrationId and deviceSecret"
+              + " instead of e-mail and password. The same token and the same 401 as sign-in.")
+  @ApiResponse(responseCode = "200", description = "Signed in")
+  @ApiResponse(responseCode = "401", description = "Not approved, or wrong secret")
+  public AuthenticatedUserResource deviceSignIn(@Valid @RequestBody DeviceSignIn request) {
+    return IdentityResourceAssembler.toResource(
+        deviceSignIn.handle(
+            new BrigadeRegistrationId(request.registrationId()), request.deviceSecret()));
   }
 }

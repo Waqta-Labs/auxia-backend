@@ -2,6 +2,7 @@ package com.waqtalabs.auxia.emergencymanagement.application;
 
 import com.waqtalabs.auxia.emergencymanagement.domain.model.aggregates.DistributionPlan;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DistributionPlanId;
+import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.DistributionPlanStatus;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.EmergencyId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.OrganizationId;
 import com.waqtalabs.auxia.emergencymanagement.domain.model.valueobjects.ZoneId;
@@ -51,6 +52,18 @@ public class InMemoryDistributionPlanRepository implements DistributionPlanRepos
   public boolean hasPendingPlans(EmergencyId emergencyId, OrganizationId organizationId) {
     return findByEmergencyId(emergencyId, organizationId).stream()
         .anyMatch(DistributionPlan::isPending);
+  }
+
+  @Override
+  public List<DistributionPlan> findApprovedByZoneId(ZoneId zoneId) {
+    return mostRecentFirst(
+        plans.values().stream()
+            .filter(plan -> plan.zoneId().equals(zoneId))
+            .filter(
+                plan ->
+                    plan.status() == DistributionPlanStatus.APPROVED
+                        || plan.status() == DistributionPlanStatus.EXECUTED)
+            .toList());
   }
 
   private static List<DistributionPlan> mostRecentFirst(List<DistributionPlan> plans) {

@@ -7,7 +7,7 @@ import com.waqtalabs.auxia.resourcemanagement.domain.repositories.BrigadeReposit
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-/** Brigade names are unique inside an organization, ignoring case. */
+/** Brigade names are unique inside an organization, ignoring case; codes, in the platform. */
 @Service
 public class CreateBrigadeCommandHandler {
 
@@ -20,12 +20,16 @@ public class CreateBrigadeCommandHandler {
   @Transactional
   public Brigade handle(CreateBrigadeCommand command) {
     Brigade brigade =
-        Brigade.create(command.organizationId(), command.name(), command.baseLocation());
+        Brigade.create(
+            command.organizationId(), command.name(), command.baseLocation(), command.code());
     boolean nameTaken =
         brigadeRepository.findByOrganizationId(command.organizationId()).stream()
             .anyMatch(existing -> existing.hasName(brigade.name()));
     if (nameTaken) {
       throw new DuplicateBrigadeException(brigade.name());
+    }
+    if (brigadeRepository.findByCode(brigade.code()).isPresent()) {
+      throw new DuplicateBrigadeException(brigade.code());
     }
     return brigadeRepository.save(brigade);
   }

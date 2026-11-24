@@ -3,6 +3,9 @@ package com.waqtalabs.auxia.emergencymanagement.application;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.assertj.core.api.Assertions.catchThrowableOfType;
 
+import com.waqtalabs.auxia.emergencymanagement.application.commandhandlers.SubmitToSinpadCommandHandler;
+import com.waqtalabs.auxia.emergencymanagement.application.commands.SubmitToSinpadCommand;
+import com.waqtalabs.auxia.emergencymanagement.application.ports.SinpadGateway.SinpadRegistration;
 import com.waqtalabs.auxia.emergencymanagement.application.queries.GetSinpadExportQuery;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.SinpadExport;
 import com.waqtalabs.auxia.emergencymanagement.application.queryservices.SinpadExportQueryService;
@@ -31,7 +34,7 @@ import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.Test;
 
-/** Export of the field reports of an emergency for SINPAD (US-33). */
+/** Export of the field reports of an emergency for SINPAD, as a file or sent to it (US-33). */
 class SinpadExportUseCasesTests {
 
   private final InMemoryEmergencyRepository emergencies = new InMemoryEmergencyRepository();
@@ -46,6 +49,16 @@ class SinpadExportUseCasesTests {
           export -> {
             written.add(export);
             return new byte[] {1};
+          });
+
+  private final List<SinpadExport> submitted = new ArrayList<>();
+  private final SubmitToSinpadCommandHandler submitToSinpad =
+      new SubmitToSinpadCommandHandler(
+          exports,
+          export -> {
+            submitted.add(export);
+            return new SinpadRegistration(
+                "SINPAD-2026-000001", export.rows().size(), LocalDateTime.of(2026, 3, 15, 13, 0));
           });
 
   private final Emergency emergency =
@@ -149,6 +162,37 @@ class SinpadExportUseCasesTests {
                 EmergencyNotFoundException.class,
                 () -> exports.handle(new GetSinpadExportQuery(EmergencyId.generate()))))
         .isNotNull();
+  }
+
+  @Test
+  void submissionSendsTheRowsOfTheExportAndReturnsTheRegistrationOfSinpad() {
+    FieldReport first = report(zone, hour(9), complete(140, 35));
+    FieldReport second = report(zone, hour(12), complete(20, 5));
+
+    SinpadRegistration registration =
+        submitToSinpad.handle(new SubmitToSinpadCommand(emergency.id()));
+
+    assertThat(registration.registrationCode()).isEqualTo("SINPAD-2026-000001");
+    assertThat(registration.reportsReceived()).isEqualTo(2);
+    assertThat(submitted.getFirst().emergency()).isEqualTo(emergency);
+    assertThat(submitted.getFirst().rows())
+        .extracting(row -> row.report().id())
+        .containsExactly(first.id(), second.id());
+    assertThat(written).isEmpty();
+  }
+
+  @Test
+  void anIncompleteReportIsNeverSent() {
+    report(zone, hour(8), complete(140, 35));
+    reports.save(
+        FieldReport.register(emergency.id(), "Sin datos todavía", ReportSource.CITIZEN, hour(9)));
+
+    assertThat(
+            catchThrowableOfType(
+                IncompleteSinpadReportsException.class,
+                () -> submitToSinpad.handle(new SubmitToSinpadCommand(emergency.id()))))
+        .isNotNull();
+    assertThat(submitted).isEmpty();
   }
 
   private FieldReport report(Zone zone, LocalDateTime at, StructuredFieldData data) {
