@@ -23,3 +23,8 @@ Característica: US-06 Ordenar y filtrar zonas según score de urgencia
     Dado que un reporte de la zona "Quebrada Pedregal" menciona la necesidad "WATER"
     Cuando la autoridad filtra las zonas con la necesidad "WATER"
     Entonces solo se muestran las zonas "Quebrada Pedregal"
+
+  Escenario: Condiciones de acceso que reportan los ciudadanos
+    Dado que 2 ciudadanos reportan la vía bloqueada en la zona "Quebrada Corrales"
+    Cuando la autoridad solicita el listado ordenado de zonas
+    Entonces la zona "Quebrada Corrales" muestra 2 reportes de "ROAD_BLOCKED"

@@ -52,15 +52,47 @@ public record ApprovedPlan(
         "{\"latitude\": %s, \"longitude\": %s}".formatted(latitude, longitude));
   }
 
+  /**
+   * The same plan, for a zone at these coordinates, still proposed, so the scenario can act before
+   * the authority approves it.
+   *
+   * @param withBrigade whether the organization has a brigade with a leader to take the plan
+   */
+  public static ProposedPlan proposeAt(
+      MockMvc mockMvc,
+      FakeAiService aiService,
+      String zoneName,
+      double latitude,
+      double longitude,
+      boolean withBrigade)
+      throws Exception {
+    return propose(
+        mockMvc,
+        aiService,
+        zoneName,
+        "{\"latitude\": %s, \"longitude\": %s}".formatted(latitude, longitude),
+        withBrigade);
+  }
+
   private static ApprovedPlan prepare(
       MockMvc mockMvc, FakeAiService aiService, String zoneName, String geolocation)
+      throws Exception {
+    return propose(mockMvc, aiService, zoneName, geolocation, true).approve();
+  }
+
+  private static ProposedPlan propose(
+      MockMvc mockMvc,
+      FakeAiService aiService,
+      String zoneName,
+      String geolocation,
+      boolean withBrigade)
       throws Exception {
     var organization = SignedInOrganization.register(mockMvc);
     var api = new Api(mockMvc, organization);
     String inventoryId = api.idOf(api.send(post("/api/v1/inventories"), "{\"name\": \"Lima\"}"));
     String water = api.resource(inventoryId, "Agua 2.5 L", "WATER", 500);
     String food = api.resource(inventoryId, "Kit de alimentos", "FOOD", 300);
-    String brigadeId = api.brigade("Brigada Chosica 1");
+    String brigadeId = withBrigade ? api.brigade("Brigada Chosica 1") : null;
     String emergencyId = api.emergency();
     String zoneId =
         api.scoredZone(aiService, emergencyId, zoneName, geolocation, Need.WATER, Need.FOOD);
@@ -75,12 +107,28 @@ public record ApprovedPlan(
                 .getResponse()
                 .getContentAsString(),
             "$.plans[0].id");
-    mockMvc
-        .perform(
-            post("/api/v1/distribution-plans/" + planId + "/approve")
-                .with(organization.authority()))
-        .andExpect(status().isOk());
-    return new ApprovedPlan(organization, planId, zoneId, water, food, brigadeId);
+    return new ProposedPlan(mockMvc, organization, planId, zoneId, water, food, brigadeId);
+  }
+
+  /** A plan that the authority has not approved yet. */
+  public record ProposedPlan(
+      MockMvc mockMvc,
+      SignedInOrganization organization,
+      String planId,
+      String zoneId,
+      String water,
+      String food,
+      String brigadeId) {
+
+    /** The authority approves it; with a brigade, the approval assigns it. */
+    public ApprovedPlan approve() throws Exception {
+      mockMvc
+          .perform(
+              post("/api/v1/distribution-plans/" + planId + "/approve")
+                  .with(organization.authority()))
+          .andExpect(status().isOk());
+      return new ApprovedPlan(organization, planId, zoneId, water, food, brigadeId);
+    }
   }
 
   private record Api(MockMvc mockMvc, SignedInOrganization organization) {

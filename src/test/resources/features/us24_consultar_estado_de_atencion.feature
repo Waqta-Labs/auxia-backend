@@ -13,3 +13,8 @@ Característica: US-24 Consultar el estado de atención de una zona
   Escenario: Zona no registrada aún
     Cuando un ciudadano consulta el estado de una zona que no está registrada
     Entonces el sistema indica que no existe información disponible
+
+  Escenario: El ciudadano sabe cuándo el centro de mando aceptó su SOS
+    Dado que un ciudadano envió un SOS desde la zona "Quebrada Corrales"
+    Cuando una autoridad aprueba el plan de ayuda de la zona y no hay ninguna brigada libre
+    Entonces el SOS muestra la etapa "ACCEPTED" con la hora de la aprobación
